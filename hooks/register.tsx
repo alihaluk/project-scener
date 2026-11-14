@@ -143,9 +143,9 @@ function describe(found: Found & { note?: string }): string {
 }
 
 // A look is decoration: whatever goes wrong here must never hold up a turn.
-async function refresh($: EngineInterface, options: PluginOptions, dir?: string): Promise<void> {
+async function refresh($: EngineInterface, options: PluginOptions): Promise<void> {
   try {
-    await apply($, dir ?? (await $.session.cwd()), options)
+    await apply($, await $.session.cwd(), options)
   } catch {
     // The next event tries again.
   }
@@ -184,12 +184,6 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     await refresh($, options)
-
-    return next(e)
-  })
-
-  on('classic.CwdChanged', async ($, e, next) => {
-    await refresh($, options, e.new_cwd)
 
     return next(e)
   })

@@ -140,7 +140,7 @@ Everything the plugin does goes through Claude Code's own plugin interface (`$`)
 | `$.store.get`, `$.store.set` | Keeps your picks on your machine |
 | `$.command.register`, `$.ui.toast`, `$.ui.resolve` | The `/scene` command, a notice when a project file has a mistake, and drawing the backdrop |
 
-The plugin hooks the session starting, a client attaching, each turn starting and `classic.CwdChanged`, only to learn which folder the session is in. From `classic.CwdChanged` it reads the new folder's path (`new_cwd`) and nothing else; it never reads a message, a prompt or a tool's output.
+The plugin hooks the session starting, a client attaching and each turn starting, only to learn which folder the session is in. It never reads a message, a prompt or a tool's output.
 
 `hooks/make-colors.js` is Claude Code's theme builder, copied unchanged as Claude Code ships it for theme plugins. Its long hex strings are its stock color palettes, written as data; they are not encoded code.
 
