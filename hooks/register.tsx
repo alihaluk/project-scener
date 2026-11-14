@@ -92,7 +92,12 @@ async function find($: EngineInterface, dir: string, options: PluginOptions): Pr
 }
 
 /** Sets the look of the project at `dir`, or takes this mod's own look down. */
-async function apply($: EngineInterface, dir: string, options: PluginOptions): Promise<Found & { note?: string }> {
+async function apply(
+  $: EngineInterface,
+  dir: string,
+  options: PluginOptions,
+  again = false,
+): Promise<Found & { note?: string }> {
   const found = await find($, dir, options)
   const problem = found.problem ?? found.look?.warning
 
@@ -111,7 +116,8 @@ async function apply($: EngineInterface, dir: string, options: PluginOptions): P
 
     return found
   }
-  if (applied === found.look.key) {
+  // `again` sends the same look once more, for a client that has just attached.
+  if (applied === found.look.key && !again) {
     return found
   }
   scene = found.look.scene
@@ -136,16 +142,16 @@ function describe(found: Found & { note?: string }): string {
     lines.push(`Problem in ${found.problem}.`)
   }
   if (found.note !== undefined) {
-    lines.push(`It is saved, but this window does not draw looks (${found.note}). The Claude desktop and mobile apps do.`)
+    lines.push(`It is saved, but nothing that draws looks has this session open (${found.note}).`)
   }
 
   return lines.join('\n')
 }
 
 // A look is decoration: whatever goes wrong here must never hold up a turn.
-async function refresh($: EngineInterface, options: PluginOptions): Promise<void> {
+async function refresh($: EngineInterface, options: PluginOptions, again = false): Promise<void> {
   try {
-    await apply($, await $.session.cwd(), options)
+    await apply($, await $.session.cwd(), options, again)
   } catch {
     // The next event tries again.
   }
@@ -176,10 +182,13 @@ export const register: Register = (on, options) => {
 
   // The app may open a session in a spare folder and move it to the project
   // afterwards, so the folder is read again when a client attaches and at each turn.
+  // A client that joins a session already running is sent the look again.
   on('session.attach', async ($, e, next) => {
-    await refresh($, options)
+    const joined = await next(e)
 
-    return next(e)
+    await refresh($, options, true)
+
+    return joined
   })
 
   on('turn.start', async ($, e, next) => {
@@ -202,9 +211,11 @@ export const register: Register = (on, options) => {
       }
       await $.store.set(PICKS, word === 'reset' ? others : { ...others, [key]: word })
     }
-    const found = await apply($, dir, options)
+    const found = await apply($, dir, options, true)
+    const surfaces = await $.session.surfaces().catch(() => [])
+    const said = `${describe(found)}\nThis session is open on: ${surfaces.length === 0 ? 'nothing that draws' : surfaces.join(', ')}.`
 
-    return { text: word === '' ? `${describe(found)}\n\n${HELP}` : describe(found) }
+    return { text: word === '' ? `${said}\n\n${HELP}` : said }
   })
 
   on('ui.render', { component: 'Backdrop' }, ($, e, next) => {

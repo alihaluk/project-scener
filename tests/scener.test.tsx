@@ -89,13 +89,15 @@ test('/scene <look> sets it and remembers it for the project', async ($, on) => 
   expect(seen.store.picks).toEqual({ [PROJECT]: 'tide' })
 })
 
-test('a remembered pick is set when the session starts, once', async ($, on) => {
+test('a remembered pick is set when the session starts, and /scene sends it again', async ($, on) => {
   const seen = world(on, {}, { [PROJECT]: 'night' })
 
   await $.session.start(START)
-  await $.command.run(typed())
-
   expect(seen.sets.map(sceneOf)).toEqual(['night'])
+
+  // A client that missed the look gets it from a plain /scene.
+  expect((await $.command.run(typed())).text).toContain('This session is open on:')
+  expect(seen.sets.map(sceneOf)).toEqual(['night', 'night'])
 })
 
 test('/scene off takes the look down, and /scene reset brings the project file back', async ($, on) => {
