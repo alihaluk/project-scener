@@ -2,7 +2,7 @@
 
 Give every project its own look in the Claude desktop and mobile apps: a slow, moving backdrop with matching colors behind the conversation. With several sessions open, you can tell at a glance which project you are in.
 
-![The five looks, in light and dark mode](docs/looks.png)
+![The five looks, in light and dark mode](docs/looks.jpg)
 
 It is a plugin for [Claude Code](https://claude.com/claude-code). Looks are drawn by the Claude desktop and mobile apps; in a terminal or an editor the plugin does nothing.
 
@@ -126,7 +126,21 @@ Project Scener collects nothing and sends nothing anywhere.
 - It makes no network requests, runs no programs and calls no model.
 - It reads two things from the project: `.claude/scene.json` and the SVG that file names. It writes no files.
 - Your picks (a project's folder path and the name of its look) are kept on your machine, in the plugin's own store. Uninstalling the plugin removes them.
-- It does not read your conversations, your code or your account.
+- It does not read your conversations, your code or your account, and it reads no credential, key or token.
+
+### What the code calls
+
+Everything the plugin does goes through Claude Code's own plugin interface (`$`), on your machine:
+
+| Call | What it does |
+| --- | --- |
+| `$.theme.set`, `$.theme.clear` | Sets or removes the session's theme (the colors and the backdrop) in the Claude app. This is Claude Code's own theme call, not one from another plugin; nothing is sent anywhere. |
+| `$.fs.exists`, `$.fs.read` | Reads `.claude/scene.json` and the SVG it names, in the project folder |
+| `$.session.cwd`, `$.session.repo` | Finds the project folder, so a git worktree shares its repository's look |
+| `$.store.get`, `$.store.set` | Keeps your picks on your machine |
+| `$.command.register`, `$.ui.toast`, `$.ui.resolve` | The `/scene` command, a notice when a project file has a mistake, and drawing the backdrop |
+
+`hooks/make-colors.js` is Claude Code's theme builder, copied unchanged as Claude Code ships it for theme plugins. Its long hex strings are its stock color palettes, written as data; they are not encoded code.
 
 ## Support
 
