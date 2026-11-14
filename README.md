@@ -144,6 +144,8 @@ The plugin hooks the session starting, a client attaching, each turn starting an
 
 `hooks/make-colors.js` is Claude Code's theme builder, copied unchanged as Claude Code ships it for theme plugins. Its long hex strings are its stock color palettes, written as data; they are not encoded code.
 
+The only URL in the code is `http://www.w3.org/2000/svg` in `hooks/scenes/kit.ts`: the SVG namespace every scene's `<svg>` tag must name. It is an identifier, never fetched; the app draws the scene with no network access.
+
 ## Support
 
 Questions, problems and ideas for new looks: [open an issue](https://github.com/alihaluk/project-scener/issues).
