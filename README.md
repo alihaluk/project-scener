@@ -8,7 +8,6 @@ It is a plugin for [Claude Code](https://claude.com/claude-code). Looks are draw
 
 ## Install
 
-
 In a terminal session, at the prompt:
 
 ```
@@ -117,9 +116,21 @@ When a file has a mistake, `/scene` says what is wrong, and nothing is drawn unt
 
 ## Good to know
 
-- Your picks are kept on your machine, in the plugin's own store. Nothing leaves it.
-- The plugin reads `.claude/scene.json` and the SVG it names from the project, and nothing else.
 - There is one theme per session: if another plugin sets a theme too, the last one to set it wins.
+- A look is decoration: when anything goes wrong the plugin draws nothing and never holds up a turn.
+
+## Privacy
+
+Project Scener collects nothing and sends nothing anywhere.
+
+- It makes no network requests, runs no programs and calls no model.
+- It reads two things from the project: `.claude/scene.json` and the SVG that file names. It writes no files.
+- Your picks (a project's folder path and the name of its look) are kept on your machine, in the plugin's own store. Uninstalling the plugin removes them.
+- It does not read your conversations, your code or your account.
+
+## Support
+
+Questions, problems and ideas for new looks: [open an issue](https://github.com/alihaluk/project-scener/issues).
 
 ## Develop
 

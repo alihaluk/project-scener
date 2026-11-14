@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3faf8"/>
+      <stop offset="1" stop-color="#cfe6e3"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#sky)"/>
+  <circle cx="716" cy="300" r="118" fill="#e0a548"/>
+  <path d="M -160 560 q 80 -44 160 0 t 160 0 q 80 -44 160 0 t 160 0 q 80 -44 160 0 t 160 0 q 80 -44 160 0 t 160 0 V 1024 H -160 Z" fill="#9ccbc9"/>
+  <g transform="translate(372 640) scale(3.1)">
+    <path d="M 2 -78 L 2 -12 L 46 -12 Z" fill="#ffffff" stroke="#0e7c86" stroke-opacity=".5" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M -4 -62 L -4 -12 L -30 -12 Z" fill="#ffffff" stroke="#0e7c86" stroke-opacity=".5" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M -46 -6 H 58 L 42 14 H -32 Z" fill="#0e7c86"/>
+  </g>
+  <path d="M -100 690 q 70 -40 140 0 t 140 0 q 70 -40 140 0 t 140 0 q 70 -40 140 0 t 140 0 q 70 -40 140 0 t 140 0 q 70 -40 140 0 t 140 0 V 1024 H -100 Z" fill="#5fa9ac"/>
+  <path d="M -40 810 q 90 -42 180 0 t 180 0 q 90 -42 180 0 t 180 0 q 90 -42 180 0 t 180 0 q 90 -42 180 0 t 180 0 V 1024 H -40 Z" fill="#2f8f97"/>
+  <path d="M -140 920 q 75 -34 150 0 t 150 0 q 75 -34 150 0 t 150 0 q 75 -34 150 0 t 150 0 q 75 -34 150 0 t 150 0 q 75 -34 150 0 t 150 0 V 1024 H -140 Z" fill="#0e7c86"/>
+</svg>

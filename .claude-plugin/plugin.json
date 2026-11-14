@@ -2,7 +2,15 @@
   "name": "project-scener",
   "version": "1.0.0",
   "description": "Gives each project its own look in the Claude desktop and mobile apps: a moving backdrop with matching colors, so you can tell at a glance which project a session is in. Pick one with /scene.",
-  "author": { "name": "haluk.seven" },
+  "author": {
+    "name": "haluk.seven",
+    "url": "https://github.com/alihaluk"
+  },
+  "homepage": "https://github.com/alihaluk/project-scener#readme",
+  "repository": "https://github.com/alihaluk/project-scener",
+  "documentationUrl": "https://github.com/alihaluk/project-scener#readme",
+  "supportUrl": "https://github.com/alihaluk/project-scener/issues",
+  "privacyPolicyUrl": "https://github.com/alihaluk/project-scener#privacy",
   "license": "MIT",
   "keywords": ["theme", "backdrop", "scene", "look", "project"],
   "userConfig": {
