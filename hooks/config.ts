@@ -54,7 +54,7 @@ function modeOf(value: unknown, name: string): Parsed<ModeColors | undefined> {
     return { value: undefined }
   }
   if (!isRecord(value) || !isHex(value.background) || !isHex(value.text)) {
-    return { problem: `colors.${name} needs "background" and "text", each six-digit hex like "#1a2b3c"` }
+    return { problem: `the "${name}" colors need "background" and "text", each six-digit hex like "#1a2b3c"` }
   }
   const mode: ModeColors = { background: value.background, text: value.text }
 
@@ -62,7 +62,7 @@ function modeOf(value: unknown, name: string): Parsed<ModeColors | undefined> {
     const color = value[anchor]
 
     if (color !== undefined && !isHex(color)) {
-      return { problem: `colors.${name}.${anchor} must be six-digit hex like "#1a2b3c"` }
+      return { problem: `"${anchor}" in the "${name}" colors must be six-digit hex like "#1a2b3c"` }
     }
     if (color !== undefined) {
       mode[anchor] = color
@@ -85,7 +85,7 @@ function colorsOf(value: unknown): Parsed<ProjectFile['colors']> {
     const color = value[role]
 
     if (color !== undefined && !isHex(color)) {
-      return { problem: `colors.${role} must be six-digit hex like "#1a2b3c"` }
+      return { problem: `the "${role}" color must be six-digit hex like "#1a2b3c"` }
     }
     if (color !== undefined) {
       colors[role] = color
