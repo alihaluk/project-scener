@@ -1,0 +1,6 @@
+{
+  "name": "project-scener",
+  "description": "Project Scener: a look of its own for every project in the Claude apps.",
+  "owner": { "name": "haluk.seven" },
+  "plugins": [{ "name": "project-scener", "source": "./" }]
+}

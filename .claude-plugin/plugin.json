@@ -1,0 +1,17 @@
+{
+  "name": "project-scener",
+  "version": "1.0.0",
+  "description": "Gives each project its own look in the Claude desktop and mobile apps: a moving backdrop with matching colors, so you can tell at a glance which project a session is in. Pick one with /scene.",
+  "author": { "name": "haluk.seven" },
+  "license": "MIT",
+  "keywords": ["theme", "backdrop", "scene", "look", "project"],
+  "userConfig": {
+    "defaultLook": {
+      "type": "string",
+      "title": "Default look",
+      "description": "The look of projects you have not picked one for.",
+      "default": "none",
+      "options": ["none", "tide", "night", "circuit", "terrain", "route"]
+    }
+  }
+}
