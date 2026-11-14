@@ -13,10 +13,12 @@ type Anchor = 'surface-1' | 'surface-2' | 'surface-3' | 'text-secondary' | 'text
 /** One mode's page and text, six-digit hex. */
 export type ModeColors = { background: string; text: string } & Partial<Record<Anchor, string>>
 
-export const ROLES = ['accent', 'danger', 'success', 'warning', 'pro'] as const
-export const ANCHORS = ['surface-1', 'surface-2', 'surface-3', 'text-secondary', 'text-muted'] as const
+export const ROLES = ['accent', 'danger', 'success', 'warning', 'pro'] as const;
+export const ANCHORS = ['surface-1', 'surface-2', 'surface-3', 'text-secondary', 'text-muted'] as const;
 
-export type Palette = Record<(typeof ROLES)[number], string> & { light: ModeColors; dark: ModeColors }
+type Role = (typeof ROLES)[number];
+
+export type Palette = Record<Role, string> & { light: ModeColors; dark: ModeColors };
 
 export type Look = {
   /** What `/scene <name>` and a project file's `look` take. */
