@@ -447,3 +447,114 @@ test('the defaults keep everything on, and /scene says so', async ($, on) => {
 
   expect(text).toContain('Settings: sound on, normal; message style on; marks on click on; ripples on.')
 })
+
+const FIELDS = ['defaultLook', 'sound', 'soundLevel', 'messageStyle', 'clickMarks', 'ripples']
+
+// The plugin's rows in the settings menu, as an installed copy names them, and
+// a record of what `/scene <setting> <value>` wrote there. `deny` plays a row
+// that refuses the change.
+function configMenu(on: On, deny?: string): { key: string; value: unknown }[] {
+  const writes: { key: string; value: unknown }[] = []
+
+  on('config.list', () => ({
+    value: [
+      { key: 'theme', label: 'Theme', kind: 'choice' as const, value: 'dark', provider: { plugin: 'engine', tier: 'core' as const }, isLocked: false },
+      ...FIELDS.map(field => ({
+        key: `project-scener@project-scener.${field}`,
+        label: field,
+        kind: 'text' as const,
+        value: '',
+        provider: { plugin: 'project-scener', tier: 'user' as const },
+        isLocked: false,
+      })),
+    ],
+  }))
+  on('config.set', (_, e) => {
+    if (deny !== undefined) {
+      return { deny }
+    }
+    writes.push({ key: e.key, value: e.value })
+
+    return { value: e.value }
+  })
+
+  return writes
+}
+
+test('/scene ripples off writes the plugin option, and the backdrop drops its shader at once', async ($, on) => {
+  world(on, {}, { [PROJECT]: 'tide' })
+  const writes = configMenu(on)
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed('ripples off'))
+
+  expect(writes).toEqual([{ key: 'project-scener@project-scener.ripples', value: false }])
+  expect(text).toContain('Ripples: off, for every project.')
+  expect(text).toContain('ripples off.')
+
+  const ui = await backdrop($, 'tide')
+
+  expect(await ui.find({ type: 'Shader' })).toBeUndefined()
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('/scene sound cues sends the look again without its ambience', async ($, on) => {
+  const seen = world(on, {}, { [PROJECT]: 'night' })
+  const writes = configMenu(on)
+
+  await $.session.start(START)
+  expect(seen.sets[0]?.sound?.ambience).toBeDefined()
+
+  const { text } = await $.command.run(typed('sound cues'))
+
+  expect(writes).toEqual([{ key: 'project-scener@project-scener.sound', value: 'cues only' }])
+  expect(text).toContain('Settings: sound cues only, normal;')
+  expect(seen.sets.at(-1)?.sound?.ambience).toBeUndefined()
+  expect(seen.sets.at(-1)?.sound?.cues).toEqual(SOUNDS.night?.cues)
+})
+
+test('/scene default <look> covers projects with no pick', async ($, on) => {
+  const seen = world(on)
+  const writes = configMenu(on)
+
+  await $.session.start(START)
+  expect(seen.sets.length).toBe(0)
+
+  await $.command.run(typed('default terrain'))
+
+  expect(writes).toEqual([{ key: 'project-scener@project-scener.defaultLook', value: 'terrain' }])
+  expect(sceneOf(seen.sets.at(-1))).toBe('terrain')
+  expect((await $.command.run(typed())).text).toContain('(your default look)')
+})
+
+test('a setting with no value, or one it does not take, says what it takes and writes nothing', async ($, on) => {
+  world(on)
+  const writes = configMenu(on)
+
+  await $.session.start(START)
+
+  expect((await $.command.run(typed('level'))).text).toBe('Sound level is normal. `/scene level` takes: quiet, normal, loud.')
+  expect((await $.command.run(typed('marks maybe'))).text).toContain('"maybe" is not one of them.')
+  expect(writes).toEqual([])
+})
+
+test('a change the settings refuse says why, and the setting stays', async ($, on) => {
+  world(on)
+  configMenu(on, 'your organization sets it')
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed('style off'))
+
+  expect(text).toBe('Message style stays on: your organization sets it')
+  expect((await $.command.run(typed())).text).toContain('message style on;')
+})
+
+test('a build with no rows for the plugin points to /config', async ($, on) => {
+  world(on)
+  on('config.list', () => ({ value: [] }))
+
+  await $.session.start(START)
+
+  expect((await $.command.run(typed('ripples off'))).text).toContain('`/config` in a terminal session')
+})

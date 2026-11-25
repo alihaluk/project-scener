@@ -38,6 +38,7 @@ That project now has the Tide look, in every session, until you change it. A git
 | `/scene <look>` | Picks a look for this project |
 | `/scene off` | No look for this project |
 | `/scene reset` | Forgets your pick, back to the project's own look or your default |
+| `/scene <setting> <value>` | Changes one of the settings below, like `/scene ripples off` |
 
 ### The looks
 
@@ -53,20 +54,24 @@ Every look follows light and dark mode, and stands still for people who have ask
 
 In the desktop app each look also has a quiet sound of its own and draws your messages in its own bubbles. The sound stays off until you press the speaker in the session's title bar.
 
-Click the bare backdrop and the look answers: in the desktop app a ripple spreads from where you pressed, gone within a second, and every app that draws looks keeps a mark there until the look changes. Night joins its stars into a constellation of your own, Terrain its flags into a trail and Route its stops into a route; Tide leaves a buoy and Circuit a via.
+Click the bare backdrop and the look answers: in the desktop app a ripple spreads from where you pressed, gone within a second, and every app that draws looks keeps a mark there until the look changes. Night joins its stars into a constellation of your own, Terrain its flags into a trail and Route its stops into a route; Tide leaves a buoy and Circuit a via. A look keeps the newest twelve marks.
+
+The desktop app stops a ripple that flashes: one where a spot lights up more than three times a second. So a look starts at most about three ripples a second, and when you click faster than that some clicks get a mark and no ripple. A burst of clicks also draws its new marks about three times a second.
 
 ### Settings
 
-The plugin's options (`/config` in a terminal session) apply to every project, and `/scene` shows them.
+These are the plugin's options and apply to every project. `/scene` shows them. Change one with `/scene <setting> <value>`, in the desktop app too, or in `/config` in a terminal session: both write the same options.
 
-| Option | What it does |
-| --- | --- |
-| **Default look** | The look of projects you have not picked one for. Left at `none`, they stay as the app draws them |
-| **Sound** | `on`, `cues only` (the short sounds without the ambience), or `off` |
-| **Sound level** | `quiet`, `normal` or `loud`, beside the app's own volume |
-| **Message style** | Off, your messages keep the app's own look |
-| **Marks on click** | Off, a click on the backdrop leaves nothing |
-| **Ripples** | Off, a press on the backdrop plays no ripple |
+| Option | `/scene` | What it does |
+| --- | --- | --- |
+| **Default look** | `default <look>` or `default none` | The look of projects you have not picked one for. Left at `none`, they stay as the app draws them |
+| **Sound** | `sound on`, `sound cues`, `sound off` | The whole sound, its short cues without the ambience, or none |
+| **Sound level** | `level quiet`, `level normal`, `level loud` | How loud, beside the app's own volume |
+| **Message style** | `style on`, `style off` | Off, your messages keep the app's own look |
+| **Marks on click** | `marks on`, `marks off` | Off, a click on the backdrop leaves nothing |
+| **Ripples** | `ripples on`, `ripples off` | Off, a press on the backdrop plays no ripple |
+
+`/scene level` with no value says what it is now and what it takes.
 
 ## A look of the project's own
 
@@ -142,7 +147,7 @@ Project Scener collects nothing and sends nothing anywhere.
 
 - It makes no network requests, runs no programs and calls no model.
 - A look's sound is a list of numbers that the desktop app turns into sound itself: the plugin ships no audio file and plays nothing on its own.
-- It reads two things from the project: `.claude/scene.json` and the SVG that file names. It writes no files.
+- It reads two things from the project: `.claude/scene.json` and the SVG that file names. It writes no files of its own: `/scene <setting> <value>` asks Claude Code to change the plugin's option, which Claude Code keeps in its own settings, as `/config` does.
 - Your picks (a project's folder path and the name of its look) are kept on your machine, in the plugin's own store. Uninstalling the plugin removes them.
 - It does not read your conversations, your code or your account, and it reads no credential, key or token.
 
@@ -157,11 +162,13 @@ Everything the plugin does goes through Claude Code's own plugin interface (`$`)
 | `$.session.cwd`, `$.session.repo` | Finds the project folder, so a git worktree shares its repository's look |
 | `$.session.surfaces` | Lists where the session is open (`desktop`, `mobile`), for `/scene` to say |
 | `$.store.get`, `$.store.set` | Keeps your picks on your machine |
+| `$.config.list`, `$.config.set` | Finds this plugin's own options and changes one, for `/scene <setting> <value>`. It touches no other row |
+| `$.clock.now`, `$.clock.after` | Spaces out the redraws for new marks during a burst of clicks |
 | `$.command.register`, `$.ui.toast`, `$.ui.resolve`, `$.ui.invalidate` | The `/scene` command, a notice when a project file has a mistake, drawing the backdrop, and drawing it again with a new mark |
 
 The plugin hooks the session starting, a client attaching and each turn starting, only to learn which folder the session is in and to send the look to a client that has just joined. It hooks a click on its own backdrop, to leave a mark where it landed. It never reads a message, a prompt or a tool's output.
 
-The ripples are small shader files in `hooks/shaders`. The plugin never runs them: Claude Code checks each one, and the desktop app plays it on the GPU, fed only the time and where you press.
+The ripples are small shader files in `hooks/shaders`. The plugin never runs them: Claude Code checks each one, and the desktop app plays it on the GPU, fed only the time and where you press. Each keeps its last three ripples in a buffer of three pixels, so it can start one at most every 0.35 seconds.
 
 `hooks/make-colors.js` is Claude Code's theme builder, copied unchanged as Claude Code ships it for theme plugins. Its long hex strings are its stock color palettes, written as data; they are not encoded code.
 
@@ -198,6 +205,7 @@ Project Scener, Claude masaüstü uygulamasında her projeye kendi görünümün
 - `/scene tide`: bu projeye bir görünüm seçer (`tide`, `night`, `circuit`, `terrain`, `route`)
 - `/scene off`: bu projede görünümü kapatır
 - `/scene reset`: seçiminizi unutur
+- `/scene <ayar> <değer>`: bir ayarı değiştirir, masaüstü uygulamasında da: `/scene sound off`, `/scene level quiet`, `/scene style off`, `/scene marks off`, `/scene ripples off`, `/scene default tide`
 
 Projeye özel bir görünüm için Claude'a "bu proje için bir sahne tasarla" demeniz yeterli; Claude `.claude/scene.json` ve `.claude/scene.svg` dosyalarını yazar.
 

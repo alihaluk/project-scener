@@ -40,6 +40,16 @@ let lastProblem: string | undefined
 let lastDropped: string | undefined
 // Where the backdrop was clicked since the look was set, oldest first.
 let marks: Point[] = []
+// When the scene was last drawn again for a new mark, and whether a redraw waits.
+let lastRedraw = 0
+let isRedrawWaiting = false
+
+/**
+ * The least time between two redraws for new marks, in milliseconds. A mark
+ * draws the whole scene again, so a burst of clicks draws it at most about
+ * three times a second, and the first click of a burst at once.
+ */
+const MARK_REDRAW_MS = 340
 
 /** "sound", "message style", or both, for a sentence. */
 function named(what: Extra[]): string {
@@ -219,8 +229,127 @@ function settingsLine(settings: Settings): string {
   return (
     `Settings: sound ${sound}; message style ${onOff(settings.messageStyle)}; ` +
     `marks on click ${onOff(settings.clickMarks)}; ripples ${onOff(settings.ripples)}. ` +
-    "Change them in the plugin's options (`/config` in a terminal session)."
+    'Change one with `/scene <setting> <value>`, like `/scene ripples off`.'
   )
+}
+
+/** A plugin option that `/scene <setting> <value>` changes, and the words it takes. */
+type Option = { field: string; label: string; values: Record<string, string | boolean> }
+
+const ON_OFF = { on: true, off: false }
+
+/** By the word after `/scene`. Each is a field of the plugin's `userConfig`. */
+const OPTIONS: Record<string, Option> = {
+  sound: { field: 'sound', label: 'Sound', values: { on: 'on', cues: 'cues only', 'cues only': 'cues only', off: 'off' } },
+  level: { field: 'soundLevel', label: 'Sound level', values: { quiet: 'quiet', normal: 'normal', loud: 'loud' } },
+  style: { field: 'messageStyle', label: 'Message style', values: ON_OFF },
+  marks: { field: 'clickMarks', label: 'Marks on click', values: ON_OFF },
+  ripples: { field: 'ripples', label: 'Ripples', values: ON_OFF },
+  default: {
+    field: 'defaultLook',
+    label: 'Default look',
+    values: Object.fromEntries(['none', ...LOOKS.map(look => look.name)].map(name => [name, name])),
+  },
+}
+
+function has<T>(record: Record<string, T>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key)
+}
+
+/** What a field holds now, as the plugin reads it. */
+function valueOf(field: string, options: PluginOptions): string | boolean {
+  const settings = settingsOf(options)
+  const now: Record<string, string | boolean> = {
+    sound: settings.sound,
+    soundLevel: settings.level,
+    messageStyle: settings.messageStyle,
+    clickMarks: settings.clickMarks,
+    ripples: settings.ripples,
+    defaultLook: lookNamed(String(options.defaultLook ?? ''))?.name ?? 'none',
+  }
+
+  return now[field] ?? ''
+}
+
+/** The `/config` row of one of this plugin's fields, or undefined where the build has none. */
+async function rowOf($: EngineInterface, field: string): Promise<string | undefined> {
+  let rows: Awaited<ReturnType<EngineInterface['config']['list']>> = []
+
+  try {
+    rows = await $.config.list()
+  } catch {
+    // A build with no settings menu for plugins: nothing to change here.
+  }
+  // `project-scener.<field>`, or with the marketplace's name after an `@`.
+  const ours = rows.filter(row => /^project-scener(@[^.]+)?\./.test(row.key) && row.key.endsWith(`.${field}`))
+
+  return (ours.find(row => row.key === `project-scener.${field}`) ?? ours[0])?.key
+}
+
+/**
+ * `/scene <setting> <value>`: writes the plugin's option as `/config` would,
+ * so it holds for every project and session. Answers what to say, and the
+ * options as they now stand when it changed one.
+ */
+async function setOption(
+  $: EngineInterface,
+  name: string,
+  word: string,
+  options: PluginOptions,
+): Promise<{ text: string; options?: PluginOptions }> {
+  const option = OPTIONS[name] as Option
+  const words = Object.keys(option.values).filter(key => key !== 'cues only')
+  const now = valueOf(option.field, options)
+  const shown = words.find(key => option.values[key] === now) ?? String(now)
+
+  if (!has(option.values, word)) {
+    const asked = word === '' ? '' : `"${word}" is not one of them. `
+
+    return { text: `${option.label} is ${shown}. \`/scene ${name}\` takes: ${words.join(', ')}. ${asked}`.trim() }
+  }
+  const value = option.values[word] as string | boolean
+  const key = await rowOf($, option.field)
+
+  if (key === undefined) {
+    return {
+      text: `This Claude Code can't change the plugin's options from a command. Change ${option.label} in \`/config\` in a terminal session.`,
+    }
+  }
+  const result = await $.config.set({ key, value }).catch((error: unknown) => ({
+    deny: error instanceof Error ? error.message : String(error),
+  }))
+
+  if (result.deny !== undefined) {
+    return { text: `${option.label} stays ${shown}: ${result.deny}` }
+  }
+
+  return { text: `${option.label}: ${word}, for every project.`, options: { ...options, [option.field]: value } }
+}
+
+/** Draws the scene again for a new mark: now, or once the last redraw is far enough behind. */
+async function redrawMarks($: EngineInterface): Promise<void> {
+  if (isRedrawWaiting) {
+    // The redraw that waits draws this mark too.
+    return
+  }
+  const now = await $.clock.now()
+  const wait = lastRedraw + MARK_REDRAW_MS - now
+
+  if (isRedrawWaiting) {
+    return
+  }
+  if (wait <= 0) {
+    lastRedraw = now
+    $.ui.invalidate('ui.render')
+
+    return
+  }
+  isRedrawWaiting = true
+  $.clock.after(wait, () => {
+    isRedrawWaiting = false
+    lastRedraw = now + wait
+    $.ui.invalidate('ui.render')
+  })
 }
 
 function describe(found: Outcome): string {
@@ -270,18 +399,28 @@ const HELP = [
   '`/scene <look>` picks a look for this project, `/scene off` turns it off here, and `/scene reset` forgets your pick.',
   'Click the bare backdrop of a shipped look to leave a mark there; the marks stay until the look changes.',
   'To give a project a look of its own, ask Claude to "design a scene for this project".',
+  '',
+  'Settings, for every project:',
+  '- `/scene sound on|cues|off`: the look\'s sound, its short cues alone, or none',
+  '- `/scene level quiet|normal|loud`: how loud it is',
+  "- `/scene style on|off`: your messages in the look's own bubbles",
+  '- `/scene marks on|off`: a mark where you click the bare backdrop',
+  '- `/scene ripples on|off`: a ripple where you press it',
+  '- `/scene default <look>|none`: the look of projects you have not picked one for',
 ].join('\n')
 
-export const register: Register = (on, options) => {
-  // A change of the plugin's options loads the module again, so this reads them once.
-  const settings = settingsOf(options)
+export const register: Register = (on, initial) => {
+  // A change of the plugin's options loads the module again with the new ones.
+  // `/scene <setting> <value>` also takes them up here at once, should it not.
+  let options = initial
+  let settings = settingsOf(options)
 
   on('session.start', async ($, e, next) => {
     await $.command
       .register({
         name: 'scene',
         description: "Pick this project's look: a moving backdrop with matching colors",
-        argumentHint: '[look | off | reset]',
+        argumentHint: '[look | off | reset | <setting> <value>]',
         immediate: true,
       })
       .catch(() => undefined)
@@ -309,8 +448,24 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'scene' }, async ($, e) => {
     const word = (e.args ?? '').trim().toLowerCase()
+    const [name = '', ...rest] = word.split(/\s+/)
     const dir = await $.session.cwd()
 
+    if (has(OPTIONS, name)) {
+      const changed = await setOption($, name, rest.join(' '), options)
+
+      if (changed.options === undefined) {
+        return { text: changed.text }
+      }
+      options = changed.options
+      settings = settingsOf(options)
+      // The look again with its sound and style as now set, and the backdrop
+      // again for the marks and the ripples.
+      await apply($, dir, options, true).catch(() => undefined)
+      $.ui.invalidate('ui.render')
+
+      return { text: `${changed.text}\n${settingsLine(settings)}` }
+    }
     if (word !== '') {
       const picks = await picksOf($)
       const { key } = await projectOf($, dir)
@@ -365,11 +520,12 @@ export const register: Register = (on, options) => {
 
   // A click on the bare backdrop leaves a mark in a shipped scene. A build
   // older than 2.1.326 has no such event, and the look goes on without it.
+  // The ripple needs no hook: the app plays it on the GPU as the press lands.
   try {
-    on('ui.pointer', ($, e, next) => {
+    on('ui.pointer', async ($, e, next) => {
       if (settings.clickMarks && scene?.tones !== undefined && e.scene === scene.id && isMarked(scene.id)) {
         marks = added(marks, { x: e.x, y: e.y })
-        $.ui.invalidate('ui.render')
+        await redrawMarks($).catch(() => undefined)
       }
 
       return next(e)
