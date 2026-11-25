@@ -20,6 +20,38 @@
       "description": "The look of projects you have not picked one for.",
       "default": "none",
       "options": ["none", "tide", "night", "circuit", "terrain", "route"]
+    },
+    "sound": {
+      "type": "string",
+      "title": "Sound",
+      "description": "A look's sound in the desktop app, which plays once you press the speaker in the session's title bar: all of it, its short cues alone, or none.",
+      "default": "on",
+      "options": ["on", "cues only", "off"]
+    },
+    "soundLevel": {
+      "type": "string",
+      "title": "Sound level",
+      "description": "How loud the looks' sounds are, beside the app's own volume.",
+      "default": "normal",
+      "options": ["quiet", "normal", "loud"]
+    },
+    "messageStyle": {
+      "type": "boolean",
+      "title": "Message style",
+      "description": "Draw your messages in the look's own bubbles in the desktop app. Off, they keep the app's own.",
+      "default": true
+    },
+    "clickMarks": {
+      "type": "boolean",
+      "title": "Marks on click",
+      "description": "Leave a mark where you click the bare backdrop: a star, a flag, a stop. They stay until the look changes.",
+      "default": true
+    },
+    "ripples": {
+      "type": "boolean",
+      "title": "Ripples",
+      "description": "Play a short ripple where you press the bare backdrop, in the desktop app.",
+      "default": true
     }
   }
 }

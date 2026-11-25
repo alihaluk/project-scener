@@ -56,6 +56,11 @@ export function mix(from: string, to: string, amount: number): string {
   )
 }
 
+/** A color's red, green and blue, each 0 to 1. */
+export function fractions(hex: string): [number, number, number] {
+  return channels(hex).map(channel => Math.round((channel / 255) * 1000) / 1000) as [number, number, number]
+}
+
 /** The contrast ratio of two colors, from 1 to 21, as WCAG counts it. */
 export function contrast(one: string, two: string): number {
   const luminance = (hex: string) => {
@@ -100,10 +105,21 @@ function ground(id: string, tones: Tones, isDark: boolean): string {
   )
 }
 
+/** An `<svg>` that fills its box; the namespace is an identifier, never fetched. */
+const OPEN = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"'
+
+/**
+ * A scene with a layer over it in the window's own points, where a percentage
+ * is of the window and not of the scene's cropped 1600 by 1000.
+ */
+export function layered(source: string, layer: string): string {
+  return `${OPEN}>${source}${layer}</svg>`
+}
+
 /** One SVG, 1600 by 1000, cropped to fill any screen. */
 export function frame({ light, dark }: ScenePalette, parts: Parts): string {
   return [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">',
+    `${OPEN} viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">`,
     '<style>',
     `.bg{fill:url(#bgL)}${parts.paint(light, false)}`,
     parts.motion,

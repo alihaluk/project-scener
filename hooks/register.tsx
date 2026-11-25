@@ -1,7 +1,19 @@
 import type { EngineInterface, PluginOptions, Register, ThemeResult } from 'claude-code'
 
-import { PROJECT_FILE, isSceneFile, parseProjectFile, resolveLook, resolveProjectFile, type Resolved } from './config.js'
+import {
+  PROJECT_FILE,
+  isSceneFile,
+  parseProjectFile,
+  resolveLook,
+  resolveProjectFile,
+  settingsOf,
+  withSettings,
+  type Resolved,
+  type Settings,
+} from './config.js'
 import { LOOKS, lookNamed } from './looks.js'
+import { fractions, type ScenePalette } from './scenes/kit.js'
+import { added, isMarked, withMarks, type Point } from './scenes/marks.js'
 
 /** The `$.store` key of the person's own picks: project folder to look name, or OFF. */
 const PICKS = 'picks'
@@ -26,6 +38,8 @@ let applied: string | null = null
 let scene: Resolved['scene']
 let lastProblem: string | undefined
 let lastDropped: string | undefined
+// Where the backdrop was clicked since the look was set, oldest first.
+let marks: Point[] = []
 
 /** "sound", "message style", or both, for a sentence. */
 function named(what: Extra[]): string {
@@ -147,7 +161,9 @@ function reasonOf(error: unknown): string {
 
 /** Sets the look of the project at `dir`, or takes this mod's own look down. */
 async function apply($: EngineInterface, dir: string, options: PluginOptions, again = false): Promise<Outcome> {
-  const found = await find($, dir, options)
+  const first = await find($, dir, options)
+  // The person's settings say how much of the look's sound and style to send.
+  const found = first.look === undefined ? first : { ...first, look: withSettings(first.look, settingsOf(options)) }
   const problem = found.problem ?? found.look?.warning
 
   if (problem !== undefined && problem !== lastProblem) {
@@ -162,6 +178,7 @@ async function apply($: EngineInterface, dir: string, options: PluginOptions, ag
       applied = null
       scene = undefined
       lastDropped = undefined
+      marks = []
     }
 
     return found
@@ -169,6 +186,9 @@ async function apply($: EngineInterface, dir: string, options: PluginOptions, ag
   // `again` sends the same look once more, for a client that has just attached.
   if (applied === found.look.key && !again) {
     return found
+  }
+  if (applied !== found.look.key) {
+    marks = []
   }
   scene = found.look.scene
   const { set, dropped } = await setLook($, found.look)
@@ -186,6 +206,21 @@ async function apply($: EngineInterface, dir: string, options: PluginOptions, ag
   lastDropped = said
 
   return { ...found, ...(!set.isDrawn && { note: set.reason }), ...(dropped !== undefined && { dropped }) }
+}
+
+function onOff(value: boolean): string {
+  return value ? 'on' : 'off'
+}
+
+/** The person's settings in one line, and where they change them. */
+function settingsLine(settings: Settings): string {
+  const sound = settings.sound === 'off' ? 'off' : `${settings.sound}, ${settings.level}`
+
+  return (
+    `Settings: sound ${sound}; message style ${onOff(settings.messageStyle)}; ` +
+    `marks on click ${onOff(settings.clickMarks)}; ripples ${onOff(settings.ripples)}. ` +
+    "Change them in the plugin's options (`/config` in a terminal session)."
+  )
 }
 
 function describe(found: Outcome): string {
@@ -233,10 +268,14 @@ const HELP = [
   ...LOOKS.map(look => `- \`${look.name}\`: ${look.blurb}`),
   '',
   '`/scene <look>` picks a look for this project, `/scene off` turns it off here, and `/scene reset` forgets your pick.',
+  'Click the bare backdrop of a shipped look to leave a mark there; the marks stay until the look changes.',
   'To give a project a look of its own, ask Claude to "design a scene for this project".',
 ].join('\n')
 
 export const register: Register = (on, options) => {
+  // A change of the plugin's options loads the module again, so this reads them once.
+  const settings = settingsOf(options)
+
   on('session.start', async ($, e, next) => {
     await $.command
       .register({
@@ -284,7 +323,9 @@ export const register: Register = (on, options) => {
     }
     const found = await apply($, dir, options, true)
     const surfaces = await $.session.surfaces().catch(() => [])
-    const said = `${describe(found)}\nThis session is open on: ${surfaces.length === 0 ? 'nothing that draws' : surfaces.join(', ')}.`
+    const said =
+      `${describe(found)}\nThis session is open on: ${surfaces.length === 0 ? 'nothing that draws' : surfaces.join(', ')}.\n` +
+      settingsLine(settings)
 
     return { text: word === '' ? `${said}\n\n${HELP}` : said }
   })
@@ -293,8 +334,55 @@ export const register: Register = (on, options) => {
     if ((e.surface !== 'desktop' && e.surface !== 'mobile') || scene === undefined || e.props.scene !== scene.id) {
       return next(e)
     }
-    const { Svg } = $.ui.resolve(e)
+    const { Shader, Svg } = $.ui.resolve(e)
+    const { id, tones } = scene
+    const source = tones === undefined || !settings.clickMarks ? scene.source : withMarks(scene.source, id, tones, marks)
+    const svg = <Svg source={source} alt={scene.alt} isInteractive />
+    const tint = tones && settings.ripples ? tintOf(tones) : undefined
 
-    return <Svg source={scene.source} alt={scene.alt} isInteractive />
+    // With ripples off, for a project's own art, or on a build older than 2.1.326
+    // that has no Shader: the Svg alone, which is also what any surface shows
+    // when its shader cannot play.
+    if (tint === undefined || (Shader as typeof Shader | undefined) === undefined) {
+      return svg
+    }
+    // Each module is a literal in its element, as the engine reads it off the source.
+    switch (id) {
+      case 'tide':
+        return <Shader module="./shaders/tide.ts" values={tint}>{svg}</Shader>
+      case 'night':
+        return <Shader module="./shaders/night.ts" values={tint}>{svg}</Shader>
+      case 'circuit':
+        return <Shader module="./shaders/circuit.ts" values={tint}>{svg}</Shader>
+      case 'terrain':
+        return <Shader module="./shaders/terrain.ts" values={tint}>{svg}</Shader>
+      case 'route':
+        return <Shader module="./shaders/route.ts" values={tint}>{svg}</Shader>
+      default:
+        return svg
+    }
   })
+
+  // A click on the bare backdrop leaves a mark in a shipped scene. A build
+  // older than 2.1.326 has no such event, and the look goes on without it.
+  try {
+    on('ui.pointer', ($, e, next) => {
+      if (settings.clickMarks && scene?.tones !== undefined && e.scene === scene.id && isMarked(scene.id)) {
+        marks = added(marks, { x: e.x, y: e.y })
+        $.ui.invalidate('ui.render')
+      }
+
+      return next(e)
+    })
+  } catch {
+    // No clicks: the marks never come.
+  }
+}
+
+/** A scene's accent in light and in dark mode, as its shader's `values` take it. */
+function tintOf({ light, dark }: ScenePalette): Record<'r' | 'g' | 'b' | 'dr' | 'dg' | 'db', number> {
+  const [r, g, b] = fractions(light.a)
+  const [dr, dg, db] = fractions(dark.a)
+
+  return { r, g, b, dr, dg, db }
 }

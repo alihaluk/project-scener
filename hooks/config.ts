@@ -1,6 +1,6 @@
 // Turns a built-in look, or a project's `.claude/scene.json`, into what
 // `$.theme.set` takes. No engine calls here: register.tsx reads the files.
-import type { ThemeColors, ThemeSetArgs, ThemeSound, ThemeStyle } from 'claude-code'
+import type { PluginOptions, ThemeColorInputs, ThemeColors, ThemeSetArgs, ThemeSound, ThemeStyle } from 'claude-code'
 
 import { ANCHORS, LOOKS, ROLES, SCENES, lookNamed, type Look, type ModeColors, type Palette } from './looks.js'
 import { makeColors } from './make-colors.js'
@@ -42,7 +42,8 @@ export type Resolved = {
   key: string
   label: string
   args: ThemeSetArgs
-  scene?: { id: string; source: string; alt: string }
+  /** `tones` is a shipped scene's colors, which its marks and shader draw in too. */
+  scene?: { id: string; source: string; alt: string; tones?: ScenePalette }
   /** Why Desktop would refuse to paint the colors, when it would. */
   warning?: string
   /** As in ProjectFile: a refused sound or style is the project file's to fix. */
@@ -367,7 +368,9 @@ function build(key: string, { label, palette, scene, glass, sound, style, ownSou
 function drawn(name: string, palette: Palette, alt?: string): Resolved['scene'] {
   const scene = SCENES[name]
 
-  return scene && { id: name, source: scene.draw(tonesOf(palette)), alt: alt ?? scene.alt }
+  const tones = tonesOf(palette)
+
+  return scene && { id: name, source: scene.draw(tones), alt: alt ?? scene.alt, tones }
 }
 
 /** A look that ships with the plugin, ready to set. */
@@ -419,4 +422,81 @@ export function resolveProjectFile(file: ProjectFile, svg?: string): Parsed<Reso
     glass: file.glass,
     ...extras,
   })
+}
+
+/** The person's own settings, from the plugin's options. */
+export type Settings = {
+  sound: 'on' | 'cues only' | 'off'
+  /** How loud, beside the looks' own levels: a factor on every layer's gain. */
+  level: 'quiet' | 'normal' | 'loud'
+  messageStyle: boolean
+  clickMarks: boolean
+  ripples: boolean
+}
+
+const LEVELS: Record<Settings['level'], number> = { quiet: 0.5, normal: 1, loud: 2 }
+
+function oneOf<T extends string>(value: unknown, values: readonly T[], fallback: T): T {
+  return values.find(known => known === value) ?? fallback
+}
+
+/** The settings in `options`, each one left unset or unknown at its default. */
+export function settingsOf(options: PluginOptions): Settings {
+  return {
+    sound: oneOf(options.sound, ['on', 'cues only', 'off'] as const, 'on'),
+    level: oneOf(options.soundLevel, ['quiet', 'normal', 'loud'] as const, 'normal'),
+    messageStyle: options.messageStyle !== false,
+    clickMarks: options.clickMarks !== false,
+    ripples: options.ripples !== false,
+  }
+}
+
+type Part = { layers: readonly { gain?: number }[] }
+
+/** A part of a sound with every layer's gain times `level`, at most 1. */
+function scaled<T extends Part>(part: T, level: number): T {
+  return level === 1 ? part : { ...part, layers: part.layers.map(layer => ({ ...layer, gain: Math.min(1, (layer.gain ?? 0.5) * level) })) }
+}
+
+/** A look's sound as the person set it: whole, its cues alone or none, at their level. */
+function heard(sound: ThemeSound, { sound: mode, level }: Settings): ThemeSound | undefined {
+  const factor = LEVELS[level]
+  const cues = Object.fromEntries(
+    Object.entries(sound.cues ?? {}).flatMap(([moment, cue]) => (cue === undefined ? [] : [[moment, scaled(cue, factor)]])),
+  ) as NonNullable<ThemeSound['cues']>
+  const ambience = mode === 'on' && sound.ambience !== undefined ? scaled(sound.ambience, factor) : undefined
+  const hasCues = Object.keys(cues).length > 0
+
+  if (mode === 'off' || (ambience === undefined && !hasCues)) {
+    return undefined
+  }
+
+  return { ...(ambience && { ambience }), ...(hasCues && { cues }) }
+}
+
+const BUBBLE_COLORS = ['bg-user-message', 'text-user-message']
+
+/** The palette without the bubble colors, which color messages even with no style. */
+function withoutBubbles(colors: ThemeColors): ThemeColors {
+  const plain = (mode: ThemeColorInputs | undefined) =>
+    mode && (Object.fromEntries(Object.entries(mode).filter(([token]) => !BUBBLE_COLORS.includes(token))) as ThemeColorInputs)
+
+  return { ...colors, inputs: { light: plain(colors.inputs.light), dark: plain(colors.inputs.dark) } }
+}
+
+/** A look as the person's settings have it: its sound and its message style kept, changed or left out. */
+export function withSettings(look: Resolved, settings: Settings): Resolved {
+  const { sound, style, colors, ...rest } = look.args
+  const kept = sound && heard(sound, settings)
+  const styled = settings.messageStyle ? style : undefined
+
+  return {
+    ...look,
+    args: {
+      ...rest,
+      ...(colors && { colors: styled ? colors : withoutBubbles(colors) }),
+      ...(kept && { sound: kept }),
+      ...(styled && { style: styled }),
+    },
+  }
 }

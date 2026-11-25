@@ -53,9 +53,20 @@ Every look follows light and dark mode, and stands still for people who have ask
 
 In the desktop app each look also has a quiet sound of its own and draws your messages in its own bubbles. The sound stays off until you press the speaker in the session's title bar.
 
-### A default look
+Click the bare backdrop and the look answers: in the desktop app a ripple spreads from where you pressed, gone within a second, and every app that draws looks keeps a mark there until the look changes. Night joins its stars into a constellation of your own, Terrain its flags into a trail and Route its stops into a route; Tide leaves a buoy and Circuit a via.
 
-Projects you have not picked a look for stay as the app draws them. To give them all one look, set **Default look** in the plugin's options (`/config` in a terminal session).
+### Settings
+
+The plugin's options (`/config` in a terminal session) apply to every project, and `/scene` shows them.
+
+| Option | What it does |
+| --- | --- |
+| **Default look** | The look of projects you have not picked one for. Left at `none`, they stay as the app draws them |
+| **Sound** | `on`, `cues only` (the short sounds without the ambience), or `off` |
+| **Sound level** | `quiet`, `normal` or `loud`, beside the app's own volume |
+| **Message style** | Off, your messages keep the app's own look |
+| **Marks on click** | Off, a click on the backdrop leaves nothing |
+| **Ripples** | Off, a press on the backdrop plays no ripple |
 
 ## A look of the project's own
 
@@ -122,7 +133,7 @@ When a file has a mistake, `/scene` says what is wrong, and nothing is drawn unt
 
 - There is one theme per session: if another plugin sets a theme too, the last one to set it wins.
 - A look is decoration: when anything goes wrong the plugin draws nothing and never holds up a turn.
-- Sound and message styles are the desktop app's alone. Your accessibility settings win over a style: an accessibility font or higher contrast draws plain rows.
+- Sound, message styles and the ripples are the desktop app's alone; the ripples stand still for reduced motion, like the scenes. Your accessibility settings win over a style: an accessibility font or higher contrast draws plain rows.
 - A Claude Code too old for sounds and styles still draws the look's colors and scene, and `/scene` says what was left out.
 
 ## Privacy
@@ -146,9 +157,11 @@ Everything the plugin does goes through Claude Code's own plugin interface (`$`)
 | `$.session.cwd`, `$.session.repo` | Finds the project folder, so a git worktree shares its repository's look |
 | `$.session.surfaces` | Lists where the session is open (`desktop`, `mobile`), for `/scene` to say |
 | `$.store.get`, `$.store.set` | Keeps your picks on your machine |
-| `$.command.register`, `$.ui.toast`, `$.ui.resolve` | The `/scene` command, a notice when a project file has a mistake, and drawing the backdrop |
+| `$.command.register`, `$.ui.toast`, `$.ui.resolve`, `$.ui.invalidate` | The `/scene` command, a notice when a project file has a mistake, drawing the backdrop, and drawing it again with a new mark |
 
-The plugin hooks the session starting, a client attaching and each turn starting, only to learn which folder the session is in and to send the look to a client that has just joined. It never reads a message, a prompt or a tool's output.
+The plugin hooks the session starting, a client attaching and each turn starting, only to learn which folder the session is in and to send the look to a client that has just joined. It hooks a click on its own backdrop, to leave a mark where it landed. It never reads a message, a prompt or a tool's output.
+
+The ripples are small shader files in `hooks/shaders`. The plugin never runs them: Claude Code checks each one, and the desktop app plays it on the GPU, fed only the time and where you press.
 
 `hooks/make-colors.js` is Claude Code's theme builder, copied unchanged as Claude Code ships it for theme plugins. Its long hex strings are its stock color palettes, written as data; they are not encoded code.
 

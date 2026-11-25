@@ -1,9 +1,10 @@
 import type { On, ThemeSetArgs } from 'claude-code'
-import { expect, test } from 'claude-code/testing'
+import { expect, test, type Engine } from 'claude-code/testing'
 
 import { resolveLook } from '../hooks/config.js'
 import { LOOKS } from '../hooks/looks.js'
 import { contrast } from '../hooks/scenes/kit.js'
+import { added, withMarks, type Point } from '../hooks/scenes/marks.js'
 import { SOUNDS } from '../hooks/sounds.js'
 
 const PROJECT = '/work/shop'
@@ -312,4 +313,137 @@ test("an older build refusing a file's own style raises no toast", async ($, on)
 
   expect(seen.sets[0]?.style).toBeUndefined()
   expect(seen.toasts).toEqual([])
+})
+
+const GLASS = { blur: 18, opacity: 0.62 }
+
+// The backdrop as the desktop app draws it, after the look named `scene` was set.
+function backdrop($: Engine, scene: string) {
+  return $.ui.mount({
+    plugin: 'project-scener',
+    surface: 'desktop',
+    component: 'Backdrop',
+    requestId: 'backdrop',
+    props: { scene, plugin: 'project-scener', glass: GLASS },
+  })
+}
+
+test('every shipped look plays its own shader over its scene', async ($, on) => {
+  world(on)
+
+  await $.session.start(START)
+
+  for (const look of LOOKS) {
+    await $.command.run(typed(look.name))
+    const ui = await backdrop($, look.scene)
+    const shader = await ui.find({ type: 'Shader' })
+
+    expect(shader?.props.module).toBe(`hooks/shaders/${look.scene}.ts`)
+    expect(Object.keys((shader?.props.values ?? {}) as object).sort()).toEqual(['b', 'db', 'dg', 'dr', 'g', 'r'])
+    expect(await ui.find({ type: 'Svg' })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test("a project's own art draws with no shader", async ($, on) => {
+  world(on, {
+    [`${PROJECT}/.claude/scene.json`]: '{ "scene": "scene.svg", "colors": { "accent": "#e11d48" } }',
+    [`${PROJECT}/.claude/scene.svg`]: '<svg viewBox="0 0 10 10"><circle r="5"/></svg>',
+  })
+
+  await $.session.start(START)
+  const ui = await backdrop($, 'project')
+
+  expect(await ui.find({ type: 'Shader' })).toBeUndefined()
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  await ui.unmount()
+})
+
+// The app raises a click on the backdrop itself, and a test can't: the marks a
+// click leaves are checked here as the hook draws them.
+const TONES = resolveLook(LOOKS[1]!).value?.scene?.tones
+
+test('a mark lands where the click was, joined to the one before', () => {
+  const source = withMarks('<svg/>', 'night', TONES!, [
+    { x: 0.25, y: 0.5 },
+    { x: 0.75, y: 0.125 },
+  ])
+
+  expect(source).toContain('<svg x="25.00%" y="50.00%" overflow="visible">')
+  expect(source).toContain('<line class="mk-path" x1="25.00%" y1="50.00%" x2="75.00%" y2="12.50%"/>')
+  expect(source).toContain('prefers-reduced-motion')
+})
+
+test('marks keep the newest twelve', () => {
+  let points: Point[] = []
+
+  for (let at = 0; at < 15; at++) {
+    points = added(points, { x: at / 16, y: 0.5 })
+  }
+
+  expect(points.length).toBe(12)
+  expect(points[0]?.x).toBe(3 / 16)
+})
+
+test('a scene with no marks, or no clicks yet, draws as it is', () => {
+  expect(withMarks('<svg/>', 'project', TONES!, [{ x: 0.5, y: 0.5 }])).toBe('<svg/>')
+  expect(withMarks('<svg/>', 'tide', TONES!, [])).toBe('<svg/>')
+})
+
+test('every shipped scene with a full set of marks stays under the size limit', () => {
+  const points = Array.from({ length: 12 }, (_, at) => ({ x: at / 12, y: 0.5 }))
+
+  for (const look of LOOKS) {
+    const scene = resolveLook(look).value?.scene
+
+    expect(withMarks(scene?.source ?? '', look.scene, scene?.tones ?? TONES!, points).length).toBeLessThan(131072)
+  }
+})
+
+test('the settings can turn the sound, the style and the ripples off', { options: { sound: 'off', messageStyle: false, ripples: false } }, async ($, on) => {
+  const seen = world(on, {}, { [PROJECT]: 'tide' })
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed())
+
+  expect(seen.sets[0]?.sound).toBeUndefined()
+  expect(seen.sets[0]?.style).toBeUndefined()
+  expect(seen.sets[0]?.colors?.inputs.light?.['bg-user-message']).toBeUndefined()
+  expect(sceneOf(seen.sets[0])).toBe('tide')
+  expect(text).not.toContain('title bar')
+  expect(text).toContain('Settings: sound off; message style off; marks on click on; ripples off.')
+
+  const ui = await backdrop($, 'tide')
+
+  expect(await ui.find({ type: 'Shader' })).toBeUndefined()
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('cues alone keep the short sounds and leave out the ambience', { options: { sound: 'cues only' } }, async ($, on) => {
+  const seen = world(on, {}, { [PROJECT]: 'night' })
+
+  await $.session.start(START)
+
+  expect(seen.sets[0]?.sound?.ambience).toBeUndefined()
+  expect(seen.sets[0]?.sound?.cues).toEqual(SOUNDS.night?.cues)
+})
+
+test('the sound level scales every layer', { options: { soundLevel: 'quiet' } }, async ($, on) => {
+  const seen = world(on, {}, { [PROJECT]: 'tide' })
+
+  await $.session.start(START)
+  const quiet = seen.sets[0]?.sound?.ambience?.layers[0]?.gain
+  const usual = SOUNDS.tide?.ambience?.layers[0]?.gain ?? 0
+
+  expect(Math.abs((quiet ?? 0) - usual / 2)).toBeLessThan(1e-9)
+})
+
+test('the defaults keep everything on, and /scene says so', async ($, on) => {
+  world(on, {}, { [PROJECT]: 'circuit' })
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed())
+
+  expect(text).toContain('Settings: sound on, normal; message style on; marks on click on; ripples on.')
 })
