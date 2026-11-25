@@ -1,6 +1,6 @@
 ---
 name: design-scene
-description: Design a custom look for the current project with the project-scener plugin - a moving SVG backdrop and matching colors, saved in the project's .claude folder. Use when the person asks to design, make, create or change a scene, backdrop, look or theme for this project, or to give the project its own colors.
+description: Design a custom look for the current project with the project-scener plugin - a moving SVG backdrop and matching colors, with a sound and a message style, saved in the project's .claude folder. Use when the person asks to design, make, create or change a scene, backdrop, look or theme for this project, or to give the project its own colors, sound or message style.
 ---
 
 # Design a scene for this project
@@ -62,6 +62,8 @@ The project's own art and full palette:
 | `alt` | What the scene shows, for a screen reader. |
 | `colors` | Six-digit hex only. `accent`, `danger`, `success`, `warning`, `pro`; and `light` and `dark`, each with `background` and `text`. All optional: what is left out comes from `look`, or from quiet grays tinted toward the accent. |
 | `glass` | How the app frosts its panels over the scene: `blur` 0 to 100, `opacity` 0 to 1 (lower shows more of the scene), or `false` for none. |
+| `sound` | A shipped look's sound by name, `"none"`, or a sound of the project's own (below). Left out, a shipped scene or `look` brings its own, and the project's own art is silent. |
+| `style` | How the desktop app draws messages: a shipped look's style by name, `"none"` for the app's own, or a style of the project's own (below). Left out, it follows `sound`'s rule. |
 
 Rules for colors that the plugin enforces with a toast when broken:
 
@@ -69,6 +71,45 @@ Rules for colors that the plugin enforces with a toast when broken:
 - Tint the backgrounds toward the accent's hue and keep them quiet: a light `background` near white, a dark one near black. Leave pure `#ffffff` and `#000000` to looks that are about them.
 - Keep meaning: `danger` stays a red, `success` a green, `warning` an amber, each tuned toward the look.
 - A mode may also give `surface-1`, `surface-2`, `surface-3` (cards, panels, menus: each as light as the page or lighter), `text-secondary` and `text-muted`.
+
+### Sound and message style
+
+Both are drawn by the desktop app alone, and most projects do well with a shipped look's (`"sound": "night"`). Write your own only when the person asks for it.
+
+A sound is numbers, never a file: the app makes it from layers of tones and noise. It stays off until the person presses the speaker in the session's title bar.
+
+```json
+"sound": {
+  "ambience": {
+    "layers": [{ "wave": "pink", "drone": true, "gain": 0.2, "filter": { "type": "lowpass", "hz": 420, "to": 900 } }]
+  },
+  "cues": {
+    "done": { "layers": [{ "wave": "bell", "notes": ["A4", "E5"], "step": 0.14, "release": 1.2 }] }
+  }
+}
+```
+
+- `ambience` plays while the window is in use. Each layer is a `drone` (`"drone": true`, a steady sound) or a `scatter` (hits that fall at random, 0.02 to 10 a second), with `reverb` 0 to 1 for the whole.
+- `cues` are `send`, `tool`, `compact`, `done`, `ask`, `error` and `click` (the bare backdrop clicked; its notes run from the left edge to the right). The app plays them at its own moments. Each has 1 to 8 layers.
+- A layer's `wave` is `sine`, `triangle`, `square`, `saw` or `bell` with `notes` (1 to 16, such as `"C5"` or `"F#3"`), or the noise `white`, `pink`, `brown` or `crackle`. It may give `gain` 0 to 1, `pan` -1 to 1, `filter` (`lowpass`, `highpass` or `bandpass` at `hz` 20 to 10,000, moving to `to`), `tremolo` (`hz` 0.05 to 30, `depth` 0 to 1), and outside a drone `step` 0 to 2, `glide` -24 to 24, `attack` 0.002 to 2 and `release` 0.01 to 4.
+- A cue must render in under 32 seconds of audio: many notes, long releases and reverb add up, and the app refuses one over that.
+- Keep it quiet and sparse, since it plays for hours beside the person's work, and never imitate a system chime.
+
+A style restyles the conversation's own rows. The words stay the app's text, so selecting, copying and screen readers keep working.
+
+```json
+"style": {
+  "Heading": { "fontFamily": ["serif"] },
+  "UserMessage": { "backgroundColor": "bg-user-message", "color": "text-user-message", "radius": 12, "paddingX": 14, "paddingY": 10 }
+}
+```
+
+- The parts are `Text`, `Heading`, `UserMessage`, `AssistantMessage` and `ToolUse`. Type: `fontFamily` (one of `sans`, `serif`, `mono`, `code`, `cursive`, in a list), `fontSize` 11 to 28, `fontWeight`, `italic`, `letterSpacing` -1 to 4, `lineHeight` 12 to 48 in points. Box: `backgroundColor`, `radius` 0 to 64, `borderColor`, `borderWidth` 0 to 8, `shadow` and padding 0 to 48. A message may also `rotate` -3 to 3 degrees.
+- Name colors, such as `surface-1`, `text-primary`, `border-accent`, or the bubble colors `bg-user-message` and `text-user-message` that the plugin works out from `colors`, so one rule serves light and dark.
+- The scene shows behind every row, so give any part whose text color you set a solid `backgroundColor`. A rule whose words fall under 3:1 is drawn in the app's own colors.
+- Leave `Text` alone unless asked: a font there overrides the person's own font choice.
+
+The app checks a sound or style of the project's own when the look is set. One it refuses is left out with the reason in a toast and in `/scene`, while the colors and the scene still draw.
 
 ## 3. Draw `.claude/scene.svg`
 
@@ -104,6 +145,6 @@ One self-contained SVG, drawn behind the whole window:
 
 1. Read `scene.json` back as JSON, and check the SVG is well formed and under the size limit.
 2. Tell the person to run `/scene`: it applies the files at once and reports any problem in them by name. A problem also shows as a toast.
-3. Ask them to look in both light and dark mode, and adjust from what they say. You cannot see the result yourself.
+3. Ask them to look in both light and dark mode, and adjust from what they say. You cannot see the result yourself. Where the look has a sound, ask them to press the speaker in the session's title bar and listen too.
 
 The person's own `/scene <look>` pick for a project wins over these files; `/scene reset` goes back to them.

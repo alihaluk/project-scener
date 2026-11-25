@@ -1,10 +1,12 @@
 // Turns a built-in look, or a project's `.claude/scene.json`, into what
 // `$.theme.set` takes. No engine calls here: register.tsx reads the files.
-import type { ThemeSetArgs } from 'claude-code'
+import type { ThemeColors, ThemeSetArgs, ThemeSound, ThemeStyle } from 'claude-code'
 
 import { ANCHORS, LOOKS, ROLES, SCENES, lookNamed, type Look, type ModeColors, type Palette } from './looks.js'
 import { makeColors } from './make-colors.js'
-import { mix, type ScenePalette } from './scenes/kit.js'
+import { contrast, mix, type ScenePalette } from './scenes/kit.js'
+import { SOUNDS } from './sounds.js'
+import { STYLES } from './styles.js'
 
 /** Where a project keeps its look, under the project's root. */
 export const PROJECT_FILE = '.claude/scene.json'
@@ -26,6 +28,12 @@ export type ProjectFile = {
   alt?: string
   colors?: Partial<Omit<Palette, 'light' | 'dark'>> & { light?: ModeColors; dark?: ModeColors }
   glass?: Glass
+  /** A shipped scene's sound, the file's own, or `false` for none. */
+  sound?: ThemeSound | false
+  /** A shipped scene's message style, the file's own, or `false` for the app's own. */
+  style?: ThemeStyle | false
+  /** The file wrote a sound or a style of its own, so a refusal is its author's to fix. */
+  ownSoundOrStyle?: true
 }
 
 /** A look ready to set, and what draws its scene. */
@@ -37,6 +45,8 @@ export type Resolved = {
   scene?: { id: string; source: string; alt: string }
   /** Why Desktop would refuse to paint the colors, when it would. */
   warning?: string
+  /** As in ProjectFile: a refused sound or style is the project file's to fix. */
+  ownSoundOrStyle?: true
 }
 
 export type Parsed<T> = { value: T; problem?: undefined } | { value?: undefined; problem: string }
@@ -129,6 +139,29 @@ function glassOf(value: unknown): Parsed<Glass | undefined> {
   }
 }
 
+/**
+ * A `sound` or `style` field: a shipped scene's name, `"none"` or `false`, or an
+ * object of the file's own. The app checks an object's values when the look is
+ * set, and says what to change.
+ */
+function extraOf<T>(value: unknown, field: string, shipped: Record<string, T>): Parsed<T | false | undefined> {
+  const names = `${Object.keys(shipped).join(', ')}, none`
+
+  if (value === undefined) {
+    return { value: undefined }
+  }
+  if (value === false || value === 'none') {
+    return { value: false }
+  }
+  if (typeof value === 'string') {
+    const named = shipped[value]
+
+    return named === undefined ? { problem: `"${field}" must be one of: ${names}, or an object of its own` } : { value: named }
+  }
+
+  return isRecord(value) ? { value: value as T } : { problem: `"${field}" must be one of: ${names}, or an object of its own` }
+}
+
 /** Whether a project file's `scene` names an SVG file and not a built-in scene. */
 export function isSceneFile(scene: string | undefined): scene is string {
   return scene !== undefined && scene.toLowerCase().endsWith('.svg')
@@ -167,9 +200,11 @@ export function parseProjectFile(text: string): Parsed<ProjectFile> {
   }
   const colors = colorsOf(data.colors)
   const glass = glassOf(data.glass)
+  const sound = extraOf(data.sound, 'sound', SOUNDS)
+  const style = extraOf(data.style, 'style', STYLES)
 
-  if (colors.problem !== undefined || glass.problem !== undefined) {
-    return { problem: colors.problem ?? glass.problem ?? '' }
+  if (colors.problem !== undefined || glass.problem !== undefined || sound.problem !== undefined || style.problem !== undefined) {
+    return { problem: colors.problem ?? glass.problem ?? sound.problem ?? style.problem ?? '' }
   }
   if (look === undefined && scene === undefined && colors.value === undefined) {
     return { problem: `it needs a "look" (${names}), a "scene" or "colors"` }
@@ -185,6 +220,9 @@ export function parseProjectFile(text: string): Parsed<ProjectFile> {
       ...(alt !== undefined && { alt }),
       ...(colors.value && { colors: colors.value }),
       ...(glass.value !== undefined && { glass: glass.value }),
+      ...(sound.value !== undefined && { sound: sound.value }),
+      ...(style.value !== undefined && { style: style.value }),
+      ...((isRecord(data.sound) || isRecord(data.style)) && { ownSoundOrStyle: true as const }),
     },
   }
 }
@@ -246,9 +284,48 @@ function hash(text: string): string {
   return sum.toString(36)
 }
 
-type Drawing = { label: string; palette: Palette; scene?: Resolved['scene']; glass?: Glass }
+type Hex = `#${string}`
 
-function build(key: string, { label, palette, scene, glass }: Drawing): Parsed<Resolved> {
+/**
+ * The person's bubble in one mode: the page tinted toward the accent, only as
+ * far as its words stay at 7:1 or better.
+ */
+function bubbleOf(mode: ModeColors, accent: string): Record<'bg-user-message' | 'text-user-message', Hex> {
+  const tinted = [0.16, 0.12, 0.08, 0.04]
+    .map(amount => mix(mode.background, accent, amount))
+    .find(color => contrast(color, mode.text) >= 7)
+
+  return { 'bg-user-message': (tinted ?? mode.background) as Hex, 'text-user-message': mode.text as Hex }
+}
+
+/**
+ * The palette with the person's bubble colors added, which makeColors doesn't
+ * take, for a look with a `style`. They color the bubble even where a build
+ * draws no `style`; a build that doesn't know them leaves them be.
+ */
+function withBubbles(theme: ThemeColors, palette: Palette): ThemeColors {
+  const tones = tonesOf(palette)
+
+  return {
+    ...theme,
+    inputs: {
+      light: { ...theme.inputs.light, ...bubbleOf(palette.light, tones.light.a) },
+      dark: { ...theme.inputs.dark, ...bubbleOf(palette.dark, tones.dark.a) },
+    },
+  }
+}
+
+type Drawing = {
+  label: string
+  palette: Palette
+  scene?: Resolved['scene']
+  glass?: Glass
+  sound?: ThemeSound | false
+  style?: ThemeStyle | false
+  ownSoundOrStyle?: true
+}
+
+function build(key: string, { label, palette, scene, glass, sound, style, ownSoundOrStyle }: Drawing): Parsed<Resolved> {
   let colors: ReturnType<typeof makeColors>
 
   try {
@@ -274,11 +351,15 @@ function build(key: string, { label, palette, scene, glass }: Drawing): Parsed<R
       key,
       label,
       args: {
-        colors: colors.theme,
+        // The bubble colors color the bubble with no style too, so a look without one keeps the app's.
+        colors: style ? withBubbles(colors.theme, palette) : colors.theme,
         ...(scene && { backdrop: { scene: scene.id, glass: glass === false ? false : { ...GLASS, ...glass } } }),
+        ...(sound && { sound }),
+        ...(style && { style }),
       },
       ...(scene && { scene }),
       ...(warning !== undefined && { warning }),
+      ...(ownSoundOrStyle && { ownSoundOrStyle }),
     },
   }
 }
@@ -291,7 +372,13 @@ function drawn(name: string, palette: Palette, alt?: string): Resolved['scene'] 
 
 /** A look that ships with the plugin, ready to set. */
 export function resolveLook(look: Look): Parsed<Resolved> {
-  return build(`look:${look.name}`, { label: look.title, palette: look.palette, scene: drawn(look.scene, look.palette) })
+  return build(`look:${look.name}`, {
+    label: look.title,
+    palette: look.palette,
+    scene: drawn(look.scene, look.palette),
+    sound: SOUNDS[look.scene],
+    style: STYLES[look.scene],
+  })
 }
 
 /**
@@ -304,6 +391,13 @@ export function resolveProjectFile(file: ProjectFile, svg?: string): Parsed<Reso
   const label = file.label ?? file.look?.title ?? 'Project look'
   const key = `file:${hash(JSON.stringify([file.look?.name, file, svg]))}`
   const name = file.scene ?? file.look?.scene
+  // A shipped scene brings its own sound and style; art of the project's own takes the look's.
+  const kin = name !== undefined && SCENES[name] !== undefined ? name : file.look?.scene
+  const extras = {
+    sound: file.sound ?? (kin === undefined ? undefined : SOUNDS[kin]),
+    style: file.style ?? (kin === undefined ? undefined : STYLES[kin]),
+    ...(file.ownSoundOrStyle && { ownSoundOrStyle: file.ownSoundOrStyle }),
+  }
 
   if (isSceneFile(name)) {
     const source = (svg ?? '').trim()
@@ -315,7 +409,7 @@ export function resolveProjectFile(file: ProjectFile, svg?: string): Parsed<Reso
       return { problem: `${name} is ${source.length} characters, and a scene can be ${SCENE_LIMIT} at most` }
     }
 
-    return build(key, { label, palette, scene: { id: 'project', source, alt: file.alt ?? label }, glass: file.glass })
+    return build(key, { label, palette, scene: { id: 'project', source, alt: file.alt ?? label }, glass: file.glass, ...extras })
   }
 
   return build(key, {
@@ -323,5 +417,6 @@ export function resolveProjectFile(file: ProjectFile, svg?: string): Parsed<Reso
     palette,
     scene: name === undefined || name === 'none' ? undefined : drawn(name, palette, file.alt),
     glass: file.glass,
+    ...extras,
   })
 }

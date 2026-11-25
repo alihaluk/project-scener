@@ -1,14 +1,24 @@
 import type { On, ThemeSetArgs } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
+import { resolveLook } from '../hooks/config.js'
+import { LOOKS } from '../hooks/looks.js'
+import { contrast } from '../hooks/scenes/kit.js'
+import { SOUNDS } from '../hooks/sounds.js'
+
 const PROJECT = '/work/shop'
 
-type World = { sets: ThemeSetArgs[]; clears: number; toasts: string[]; store: Record<string, unknown> }
+type World = { sets: ThemeSetArgs[]; refused: number; clears: number; toasts: string[]; store: Record<string, unknown> }
+
+/** The app's own answer to a set it won't take, or undefined to take it. */
+type Refuse = (args: ThemeSetArgs) => string | undefined
 
 // Everything beneath the plugin: a project folder holding `files`, and a
-// record of what the plugin asked the app to draw.
-function world(on: On, files: Record<string, string> = {}, picks?: Record<string, string>): World {
-  const seen: World = { sets: [], clears: 0, toasts: [], store: picks ? { picks } : {} }
+// record of what the plugin asked the app to draw. `refuse` plays a build
+// that turns some sets down, as the app's host check does: the plugin gets
+// the reason back as a rejection.
+function world(on: On, files: Record<string, string> = {}, picks?: Record<string, string>, refuse?: Refuse): World {
+  const seen: World = { sets: [], refused: 0, clears: 0, toasts: [], store: picks ? { picks } : {} }
 
   on('store.get', (_, e) => ({ value: seen.store[e.key] }))
   on('store.set', (_, e) => {
@@ -36,6 +46,13 @@ function world(on: On, files: Record<string, string> = {}, picks?: Record<string
     return { value: undefined }
   })
   on('theme.set', (_, e) => {
+    const why = refuse?.(e)
+
+    if (why !== undefined) {
+      seen.refused++
+
+      return { deny: why }
+    }
     seen.sets.push(e)
 
     return { value: { isDrawn: true, requestId: 'backdrop' } }
@@ -170,4 +187,129 @@ test('an unknown look changes nothing', async ($, on) => {
   expect(text).toContain('There is no look named "lagoon"')
   expect(seen.sets.length).toBe(0)
   expect(seen.store.picks).toBeUndefined()
+})
+
+// A build from before theme sounds and message styles.
+const OLD_BUILD: Refuse = args =>
+  ['sound', 'style'].find(name => name in args) && 'theme.set does not know the attribute: this build takes backdrop, colors'
+
+test('every shipped look brings a sound, a message style and bubble colors', async ($, on) => {
+  const seen = world(on)
+
+  await $.session.start(START)
+
+  for (const look of LOOKS) {
+    const { text } = await $.command.run(typed(look.name))
+    const set = seen.sets.at(-1)
+
+    expect(set?.sound).toBeDefined()
+    expect(set?.style?.UserMessage).toBeDefined()
+    expect(set?.colors?.inputs.light?.['bg-user-message']).toMatch(/^#[0-9a-f]{6}$/)
+    expect(set?.colors?.inputs.dark?.['bg-user-message']).toMatch(/^#[0-9a-f]{6}$/)
+    expect(text).toContain("the speaker in the session's title bar")
+  }
+})
+
+test("the person's bubble keeps its words at 7:1 in both modes", () => {
+  for (const look of LOOKS) {
+    const inputs = resolveLook(look).value?.args.colors?.inputs
+
+    for (const mode of [inputs?.light, inputs?.dark]) {
+      expect(contrast(mode?.['bg-user-message'] ?? '', mode?.['text-user-message'] ?? '')).toBeGreaterThanOrEqual(7)
+    }
+  }
+})
+
+test('a build that takes neither sound nor style still draws the colors and the scene', async ($, on) => {
+  const seen = world(on, {}, { [PROJECT]: 'tide' }, OLD_BUILD)
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed())
+
+  expect(sceneOf(seen.sets[0])).toBe('tide')
+  expect(seen.sets[0]?.colors).toBeDefined()
+  expect(seen.sets[0]?.sound).toBeUndefined()
+  expect(seen.sets[0]?.style).toBeUndefined()
+  expect(text).toContain('Its sound and message style were left out: theme.set does not know the attribute')
+  expect(text).not.toContain('title bar')
+  // A shipped look's sound is nobody's to fix, so it raises no toast.
+  expect(seen.toasts).toEqual([])
+})
+
+test('a sound the app turns down is left out alone, and the style stays', async ($, on) => {
+  const seen = world(on, {}, { [PROJECT]: 'night' }, args =>
+    args.sound === undefined ? undefined : 'sound.cues.click would take 38 seconds of audio to render, and the most is 32',
+  )
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed())
+
+  expect(seen.sets[0]?.sound).toBeUndefined()
+  expect(seen.sets[0]?.style).toBeDefined()
+  expect(text).toContain('Its sound was left out: sound.cues.click would take 38 seconds')
+})
+
+test("a project file can borrow a shipped look's sound and keep the app's own message style", async ($, on) => {
+  const seen = world(on, {
+    [`${PROJECT}/.claude/scene.json`]: JSON.stringify({ scene: 'scene.svg', sound: 'night', style: 'none' }),
+    [`${PROJECT}/.claude/scene.svg`]: '<svg viewBox="0 0 10 10"><circle r="5"/></svg>',
+  })
+
+  await $.session.start(START)
+
+  expect(seen.sets[0]?.sound).toEqual(SOUNDS.night)
+  expect(seen.sets[0]?.style).toBeUndefined()
+})
+
+test('a project file can write a sound of its own', async ($, on) => {
+  const own = { cues: { done: { layers: [{ wave: 'sine', notes: ['C5'] }] } } }
+  const seen = world(on, { [`${PROJECT}/.claude/scene.json`]: JSON.stringify({ look: 'route', sound: own, style: false }) })
+
+  await $.session.start(START)
+
+  expect(sceneOf(seen.sets[0])).toBe('route')
+  expect(seen.sets[0]?.sound).toEqual(own)
+  expect(seen.sets[0]?.style).toBeUndefined()
+})
+
+test("a project file's own sound that the app refuses says why in a toast", async ($, on) => {
+  const loud = { ambience: { layers: [{ wave: 'pink', drone: true, gain: 7 }] } }
+  const seen = world(on, { [`${PROJECT}/.claude/scene.json`]: JSON.stringify({ look: 'tide', sound: loud }) }, undefined, args =>
+    JSON.stringify(args.sound) === JSON.stringify(loud) ? 'sound.ambience.layers[0].gain is a number, 0 to 1' : undefined,
+  )
+
+  await $.session.start(START)
+
+  expect(sceneOf(seen.sets[0])).toBe('tide')
+  expect(seen.sets[0]?.style).toBeDefined()
+  expect(seen.toasts).toEqual([
+    'project-scener: .claude/scene.json: its sound was left out: sound.ambience.layers[0].gain is a number, 0 to 1',
+  ])
+})
+
+test('a sound or style field that names no look says what it takes', async ($, on) => {
+  const seen = world(on, { [`${PROJECT}/.claude/scene.json`]: '{ "look": "tide", "sound": "lagoon" }' })
+
+  await $.session.start(START)
+
+  expect(seen.sets.length).toBe(0)
+  expect(seen.toasts[0]).toContain('"sound" must be one of: tide, night, circuit, terrain, route, none, or an object of its own')
+})
+
+test('a look with no message style leaves the bubble colors to the app', async ($, on) => {
+  const seen = world(on, { [`${PROJECT}/.claude/scene.json`]: '{ "look": "tide", "style": "none" }' })
+
+  await $.session.start(START)
+
+  expect(seen.sets[0]?.style).toBeUndefined()
+  expect(seen.sets[0]?.colors?.inputs.light?.['bg-user-message']).toBeUndefined()
+})
+
+test("an older build refusing a file's own style raises no toast", async ($, on) => {
+  const seen = world(on, { [`${PROJECT}/.claude/scene.json`]: JSON.stringify({ look: 'night', style: { Heading: { italic: true } } }) }, undefined, OLD_BUILD)
+
+  await $.session.start(START)
+
+  expect(seen.sets[0]?.style).toBeUndefined()
+  expect(seen.toasts).toEqual([])
 })

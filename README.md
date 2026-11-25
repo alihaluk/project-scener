@@ -51,6 +51,8 @@ That project now has the Tide look, in every session, until you change it. A git
 
 Every look follows light and dark mode, and stands still for people who have asked their system for reduced motion.
 
+In the desktop app each look also has a quiet sound of its own and draws your messages in its own bubbles. The sound stays off until you press the speaker in the session's title bar.
+
 ### A default look
 
 Projects you have not picked a look for stay as the app draws them. To give them all one look, set **Default look** in the plugin's options (`/config` in a terminal session).
@@ -102,8 +104,10 @@ or your own art, an SVG beside the file:
 | `alt` | What the scene shows, for a screen reader |
 | `colors` | Six-digit hex: `accent`, `danger`, `success`, `warning`, `pro`, and `light` / `dark` with `background` and `text` |
 | `glass` | How the app frosts its panels over the scene: `{ "blur": 18, "opacity": 0.62 }`, or `false` |
+| `sound` | A shipped look's sound (`"night"`), `"none"`, or a sound of your own. Left out, a shipped scene brings its own, and your own art is silent |
+| `style` | How the desktop app draws messages: a shipped look's (`"circuit"`), `"none"` for the app's own, or a style of your own. Left out, as for `sound` |
 
-A scene SVG animates with CSS in its own `<style>`, runs no script and loads nothing, and can be up to 131,072 characters. [skills/design-scene/SKILL.md](skills/design-scene/SKILL.md) has the full guide.
+A scene SVG animates with CSS in its own `<style>`, runs no script and loads nothing, and can be up to 131,072 characters. [skills/design-scene/SKILL.md](skills/design-scene/SKILL.md) has the full guide, with how to write a sound and a style of your own.
 
 When a file has a mistake, `/scene` says what is wrong, and nothing is drawn until it is fixed.
 
@@ -118,12 +122,15 @@ When a file has a mistake, `/scene` says what is wrong, and nothing is drawn unt
 
 - There is one theme per session: if another plugin sets a theme too, the last one to set it wins.
 - A look is decoration: when anything goes wrong the plugin draws nothing and never holds up a turn.
+- Sound and message styles are the desktop app's alone. Your accessibility settings win over a style: an accessibility font or higher contrast draws plain rows.
+- A Claude Code too old for sounds and styles still draws the look's colors and scene, and `/scene` says what was left out.
 
 ## Privacy
 
 Project Scener collects nothing and sends nothing anywhere.
 
 - It makes no network requests, runs no programs and calls no model.
+- A look's sound is a list of numbers that the desktop app turns into sound itself: the plugin ships no audio file and plays nothing on its own.
 - It reads two things from the project: `.claude/scene.json` and the SVG that file names. It writes no files.
 - Your picks (a project's folder path and the name of its look) are kept on your machine, in the plugin's own store. Uninstalling the plugin removes them.
 - It does not read your conversations, your code or your account, and it reads no credential, key or token.
@@ -134,7 +141,7 @@ Everything the plugin does goes through Claude Code's own plugin interface (`$`)
 
 | Call | What it does |
 | --- | --- |
-| `$.theme.set`, `$.theme.clear` | Sets or removes the session's theme (the colors and the backdrop) in the Claude app. This is Claude Code's own theme call, not one from another plugin; nothing is sent anywhere. |
+| `$.theme.set`, `$.theme.clear` | Sets or removes the session's theme (the colors, the backdrop, the sound and the message style) in the Claude app. This is Claude Code's own theme call, not one from another plugin; nothing is sent anywhere. |
 | `$.fs.exists`, `$.fs.read` | Reads `.claude/scene.json` and the SVG it names, in the project folder |
 | `$.session.cwd`, `$.session.repo` | Finds the project folder, so a git worktree shares its repository's look |
 | `$.session.surfaces` | Lists where the session is open (`desktop`, `mobile`), for `/scene` to say |

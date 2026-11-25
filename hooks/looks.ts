@@ -1,5 +1,6 @@
 // The looks that ship with the plugin: each a scene and a palette made for it.
-// To add one: draw a scene in hooks/scenes/, list it in SCENES, add a look here.
+// To add one: draw a scene in hooks/scenes/, list it in SCENES, give it a sound
+// in sounds.ts and a style in styles.ts under the scene's name, and add a look here.
 import { circuit } from './scenes/circuit.js'
 import type { Scene } from './scenes/kit.js'
 import { night } from './scenes/night.js'

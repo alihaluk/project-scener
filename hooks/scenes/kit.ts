@@ -56,6 +56,22 @@ export function mix(from: string, to: string, amount: number): string {
   )
 }
 
+/** The contrast ratio of two colors, from 1 to 21, as WCAG counts it. */
+export function contrast(one: string, two: string): number {
+  const luminance = (hex: string) => {
+    const [r, g, b] = channels(hex).map(channel => {
+      const value = channel / 255
+
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+    }) as [number, number, number]
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const [light, dark] = [luminance(one), luminance(two)].sort((a, b) => b - a) as [number, number]
+
+  return (light + 0.05) / (dark + 0.05)
+}
+
 /** `count` whole numbers from 0. */
 export function range(count: number): number[] {
   return Array.from({ length: count }, (_, at) => at)

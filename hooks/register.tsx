@@ -1,4 +1,4 @@
-import type { EngineInterface, PluginOptions, Register } from 'claude-code'
+import type { EngineInterface, PluginOptions, Register, ThemeResult } from 'claude-code'
 
 import { PROJECT_FILE, isSceneFile, parseProjectFile, resolveLook, resolveProjectFile, type Resolved } from './config.js'
 import { LOOKS, lookNamed } from './looks.js'
@@ -12,11 +12,25 @@ type Source = 'pick' | 'file' | 'default' | 'off' | 'none'
 
 type Found = { source: Source; look?: Resolved; problem?: string }
 
+type Extra = 'sound' | 'style'
+
+/** What a set left out, and the app's reason, in its own words. */
+type Dropped = { what: Extra[]; why: string }
+
+/** What came of a set: a client's note when none draws it, and what was left out. */
+type Outcome = Found & { note?: string; dropped?: Dropped }
+
 // What this mod last set: its key, and the scene the Backdrop hook draws.
 // null = nothing of ours stands, so another mod's theme is left alone.
 let applied: string | null = null
 let scene: Resolved['scene']
 let lastProblem: string | undefined
+let lastDropped: string | undefined
+
+/** "sound", "message style", or both, for a sentence. */
+function named(what: Extra[]): string {
+  return what.map(extra => (extra === 'sound' ? 'sound' : 'message style')).join(' and ')
+}
 
 function tidy(path: string): string {
   return path.replaceAll('\\', '/').replace(/\/+$/, '')
@@ -91,13 +105,48 @@ async function find($: EngineInterface, dir: string, options: PluginOptions): Pr
   return usual === undefined ? { source: 'none' } : { source: 'default', look: resolveLook(usual).value }
 }
 
+/**
+ * Sets a look. A build that doesn't take `sound` or `style`, or a value out of
+ * range or too costly, refuses the whole set, so the look is set again without
+ * the sound, then without the style, then without both: the colors and the
+ * scene still draw.
+ */
+async function setLook($: EngineInterface, look: Resolved): Promise<{ set: ThemeResult; dropped?: Dropped }> {
+  const { sound, style, ...plain } = look.args
+  const present: Extra[] = [...(sound ? (['sound'] as const) : []), ...(style ? (['style'] as const) : [])]
+  const one: Extra[][] = present.length === 2 ? [['sound'], ['style']] : []
+  const tries: Extra[][] = [[], ...one, ...(present.length > 0 ? [present] : [])]
+  let first: unknown
+  let refusal: unknown
+
+  for (const what of tries) {
+    try {
+      const set = await $.theme.set({
+        ...plain,
+        ...(sound && !what.includes('sound') && { sound }),
+        ...(style && !what.includes('style') && { style }),
+      })
+
+      return what.length === 0 ? { set } : { set, dropped: { what, why: reasonOf(refusal) } }
+    } catch (error) {
+      // The refusal just before the try that works names what that try left out.
+      first ??= error
+      refusal = error
+    }
+  }
+
+  throw first
+}
+
+/** The app's reason for refusing a set, without the call's own name around it. */
+function reasonOf(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error)
+
+  return text.replace(/^[\w.-]+: (\$\.)?theme\.set: /, '').replace(/ \(host check\)$/, '')
+}
+
 /** Sets the look of the project at `dir`, or takes this mod's own look down. */
-async function apply(
-  $: EngineInterface,
-  dir: string,
-  options: PluginOptions,
-  again = false,
-): Promise<Found & { note?: string }> {
+async function apply($: EngineInterface, dir: string, options: PluginOptions, again = false): Promise<Outcome> {
   const found = await find($, dir, options)
   const problem = found.problem ?? found.look?.warning
 
@@ -112,6 +161,7 @@ async function apply(
       await $.theme.clear()
       applied = null
       scene = undefined
+      lastDropped = undefined
     }
 
     return found
@@ -121,13 +171,24 @@ async function apply(
     return found
   }
   scene = found.look.scene
-  const set = await $.theme.set(found.look.args)
+  const { set, dropped } = await setLook($, found.look)
+
   applied = found.look.key
 
-  return set.isDrawn ? found : { ...found, note: set.reason }
+  // Only a project file's own sound or style is worth a toast: its author can fix it.
+  // A build too old for sound or style is not theirs to fix, so it raises none.
+  const said = dropped && `its ${named(dropped.what)} ${dropped.what.length > 1 ? 'were' : 'was'} left out: ${dropped.why}`
+  const isOld = dropped !== undefined && /does not know the attribute/.test(dropped.why)
+
+  if (said !== undefined && found.look.ownSoundOrStyle && !isOld && said !== lastDropped) {
+    $.ui.toast(`project-scener: ${PROJECT_FILE}: ${said}`)
+  }
+  lastDropped = said
+
+  return { ...found, ...(!set.isDrawn && { note: set.reason }), ...(dropped !== undefined && { dropped }) }
 }
 
-function describe(found: Found & { note?: string }): string {
+function describe(found: Outcome): string {
   const where: Record<Source, string> = {
     pick: 'your pick',
     file: `from ${PROJECT_FILE}`,
@@ -143,6 +204,16 @@ function describe(found: Found & { note?: string }): string {
   }
   if (found.note !== undefined) {
     lines.push(`It is saved, but nothing that draws looks has this session open (${found.note}).`)
+  }
+  const { what = [], why } = found.dropped ?? {}
+
+  if (why !== undefined) {
+    const name = named(what)
+
+    lines.push(`Its ${name} ${what.length > 1 ? 'were' : 'was'} left out: ${why}`)
+  }
+  if (found.look?.args.sound !== undefined && !what.includes('sound')) {
+    lines.push("It has a sound: in the desktop app, the speaker in the session's title bar turns it on.")
   }
 
   return lines.join('\n')
