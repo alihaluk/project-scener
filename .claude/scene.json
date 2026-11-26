@@ -1,7 +1,7 @@
 {
   "label": "Project Scener",
   "scene": "scene.svg",
-  "alt": "A filmstrip of five small frames, a sea, a night sky, a circuit, a contour map and a city route, drifting slowly across the top",
+  "alt": "A filmstrip of the five looks, a sea, a night sky, a circuit board, a contour map and a city route, running slowly through a lit projector gate across the top",
   "colors": {
     "accent": "#0e7c86",
     "danger": "#c0392b",
@@ -20,5 +20,8 @@
   "glass": {
     "blur": 18,
     "opacity": 0.62
-  }
+  },
+  "sound": "night",
+  "style": "night",
+  "ripple": "tide"
 }
