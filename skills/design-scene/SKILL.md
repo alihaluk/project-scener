@@ -18,7 +18,7 @@ Before drawing, look for the project's own identity: brand colors in a theme fil
 
 ## 2. Write `.claude/scene.json`
 
-The smallest file names a look that ships with the plugin (`tide`, `night`, `circuit`, `terrain`, `route`):
+The smallest file names a look that ships with the plugin (`tide`, `night`, `circuit`, `terrain`, `route`, `forest`, `aurora`, `paper`, `desert`):
 
 ```json
 { "look": "tide" }
@@ -89,6 +89,10 @@ Pick each by the mood of the project from the shipped looks, by name, and say in
 | `circuit` | a board's hum and faint blips, a tick for each tool call | square bubble, monospaced headings, framed tool rows | a square pulse out along a grid |
 | `terrain` | wind gusting over a ridge | a bubble with a soft shadow, serif headings | an uneven contour line |
 | `route` | a low city rumble and a far signal | a speech bubble, its tail at the lower right | a pin's ping and one ring |
+| `forest` | wind in the pines, stirring leaves and a far bird | a leaf-shaped bubble, two corners pointed | a firefly that glows and drifts up |
+| `aurora` | a high, airy pad with a cold shimmer now and then | a round bubble with a soft glow of the accent | a tall, narrow curtain of light |
+| `paper` | a quiet room and a pen scratching now and then | an index card, italic serif headings | a blot of ink that spreads and dries |
+| `desert` | wind over dunes, hissing sand and a far camel bell | a bubble with an accent edge, bold headings | a low, wide ripple over the sand |
 
 The three needn't match: a teal project with a calm feel might take `tide` for all three, a map-heavy one `route`'s ripple with `terrain`'s sound. The ripple plays over the project's own art in its `accent`, so check that the accent reads on the scene in both modes. All three are drawn by the desktop app alone. Write a sound or style of the project's own only when the person asks for it.
 
@@ -160,7 +164,22 @@ One self-contained SVG, drawn behind the whole window:
 ## 4. Check it and hand it over
 
 1. Read `scene.json` back as JSON, and check the SVG is well formed and under the size limit.
-2. Tell the person to run `/scene`: it applies the files at once and reports any problem in them by name. A problem also shows as a toast.
-3. Ask them to look in both light and dark mode, and adjust from what they say. You cannot see the result yourself. Ask them to press the speaker in the session's title bar and listen, and to click the bare backdrop a few times to see the ripple.
+2. Look at it yourself before you hand it over. Where a Chromium browser is installed (Google Chrome, Chromium or Edge), draw the scene in both modes at a desktop window's size, read the two pictures, and fix what you see: a subject under the conversation or the message box, contrast too strong for a backdrop, a mode that reads poorly. Work in a scratch folder, never in `.claude`:
+
+   ```bash
+   SCRATCH=$(mktemp -d)   # or your own scratch folder
+   # The dark copy turns its dark-mode rules on for every screen.
+   sed 's/@media (prefers-color-scheme: dark)/@media all/' .claude/scene.svg > "$SCRATCH/dark.svg"
+   cp .claude/scene.svg "$SCRATCH/light.svg"
+   for mode in light dark; do
+     printf '<html><body style="margin:0"><img src="%s.svg" style="display:block;width:100vw;height:100vh"></body></html>' "$mode" > "$SCRATCH/$mode.html"
+     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars \
+       --window-size=1440,900 --virtual-time-budget=2500 --screenshot="$SCRATCH/$mode.png" "file://$SCRATCH/$mode.html"
+   done
+   ```
+
+   On Linux the browser is `google-chrome` or `chromium`. A virtual time budget lets the animations run a little before the picture is taken. Send the person both pictures, saying they leave out the app's frosted panels and text. With no such browser, say you could not look.
+3. Tell the person to run `/scene`: it applies the files at once and reports any problem in them by name. A problem also shows as a toast.
+4. Ask them to look in both light and dark mode in the app, and adjust from what they say. Ask them to press the speaker in the session's title bar and listen, and to click the bare backdrop a few times to see the ripple.
 
 The person's own `/scene <look>` pick for a project wins over these files; `/scene reset` goes back to them.

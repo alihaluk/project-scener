@@ -1,9 +1,13 @@
 // The looks that ship with the plugin: each a scene and a palette made for it.
 // To add one: draw a scene in hooks/scenes/, list it in SCENES, give it a sound
 // in sounds.ts and a style in styles.ts under the scene's name, and add a look here.
+import { aurora } from './scenes/aurora.js'
 import { circuit } from './scenes/circuit.js'
+import { desert } from './scenes/desert.js'
+import { forest } from './scenes/forest.js'
 import type { Scene } from './scenes/kit.js'
 import { night } from './scenes/night.js'
+import { paper } from './scenes/paper.js'
 import { route } from './scenes/route.js'
 import { terrain } from './scenes/terrain.js'
 import { tide } from './scenes/tide.js'
@@ -32,7 +36,7 @@ export type Look = {
   palette: Palette
 }
 
-export const SCENES: Record<string, Scene> = { route, tide, night, circuit, terrain }
+export const SCENES: Record<string, Scene> = { route, tide, night, circuit, terrain, forest, aurora, paper, desert }
 
 export const LOOKS: readonly Look[] = [
   {
@@ -182,6 +186,126 @@ export const LOOKS: readonly Look[] = [
         text: '#ece8f7',
         'text-secondary': '#c6bfdc',
         'text-muted': '#a39bbd',
+      },
+    },
+  },
+  {
+    name: 'forest',
+    title: 'Forest',
+    blurb: 'pines on misty ridges at dusk, with fireflies, in moss green',
+    scene: 'forest',
+    palette: {
+      accent: '#4b7f2e',
+      danger: '#b8452f',
+      success: '#2f8a4f',
+      warning: '#d6a12b',
+      pro: '#5e7fa6',
+      light: {
+        background: '#ebf0e4',
+        'surface-1': '#f1f5ec',
+        'surface-2': '#f8faf5',
+        text: '#1b2617',
+        'text-secondary': '#3f4d39',
+        'text-muted': '#5a6853',
+      },
+      dark: {
+        background: '#0e140c',
+        'surface-1': '#151d12',
+        'surface-2': '#1a2417',
+        'surface-3': '#202c1c',
+        text: '#e5eedf',
+        'text-secondary': '#bccbb4',
+        'text-muted': '#97a88f',
+      },
+    },
+  },
+  {
+    name: 'aurora',
+    title: 'Aurora',
+    blurb: 'northern lights swaying over a snowy ridge, in green and violet',
+    scene: 'aurora',
+    palette: {
+      accent: '#178f7a',
+      danger: '#c94a5a',
+      success: '#2e9d5a',
+      warning: '#e0a13c',
+      pro: '#8e5fd0',
+      light: {
+        background: '#e8f0f2',
+        'surface-1': '#eff5f6',
+        'surface-2': '#f7fafb',
+        text: '#13222a',
+        'text-secondary': '#3a4d56',
+        'text-muted': '#566870',
+      },
+      dark: {
+        background: '#0a1018',
+        'surface-1': '#111a24',
+        'surface-2': '#16212d',
+        'surface-3': '#1b2835',
+        text: '#e2ecf3',
+        'text-secondary': '#b9c9d6',
+        'text-muted': '#93a6b5',
+      },
+    },
+  },
+  {
+    name: 'paper',
+    title: 'Paper',
+    blurb: 'ink sketches on ruled paper: a sun, birds and hills, in sepia',
+    scene: 'paper',
+    palette: {
+      accent: '#7a5230',
+      danger: '#b23a2e',
+      success: '#4d7f3a',
+      warning: '#c98a1e',
+      pro: '#3d5a8a',
+      light: {
+        background: '#f3eee3',
+        'surface-1': '#f7f3ea',
+        'surface-2': '#fbf9f4',
+        text: '#2a2118',
+        'text-secondary': '#51453a',
+        'text-muted': '#6c6055',
+      },
+      dark: {
+        background: '#17140f',
+        'surface-1': '#1f1b15',
+        'surface-2': '#26211a',
+        'surface-3': '#2d271f',
+        text: '#efe6d6',
+        'text-secondary': '#cdc0ac',
+        'text-muted': '#a89b87',
+      },
+    },
+  },
+  {
+    name: 'desert',
+    title: 'Desert',
+    blurb: 'dunes under a low sun, heat shimmer and a caravan, in sand and terracotta',
+    scene: 'desert',
+    palette: {
+      accent: '#b9772b',
+      danger: '#c0392b',
+      success: '#5a8a3e',
+      warning: '#e0a13a',
+      pro: '#b25a3c',
+      light: {
+        background: '#f5eadb',
+        'surface-1': '#f8f0e4',
+        'surface-2': '#fcf7f0',
+        text: '#2c1f12',
+        'text-secondary': '#56432f',
+        'text-muted': '#715d47',
+      },
+      dark: {
+        background: '#1b130b',
+        'surface-1': '#231a10',
+        'surface-2': '#2b2014',
+        'surface-3': '#33271a',
+        text: '#f2e6d3',
+        'text-secondary': '#d4c2a6',
+        'text-muted': '#ae9b80',
       },
     },
   },

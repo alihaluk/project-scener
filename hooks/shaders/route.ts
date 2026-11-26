@@ -10,10 +10,11 @@
 // within two cells of it, shows as a faint echo, too faint to count as a flash.
 // Every press gets a ping, up to six a second, and no spot flashes however the
 // clicks come.
-import { abs, buffer, dot, exp, length, max, min, mix, picture, pointers, pow, scene, shader, smoothstep, step, time, values, vec2, vec3, vec4, type Buffer } from 'claude-code/shader'
+import { abs, buffer, composer, dot, dt, exp, length, max, min, mix, PI, picture, pointers, scene, shader, sin, size, smoothstep, step, time, values, vec2, vec3, vec4, type Buffer } from 'claude-code/shader'
 
-// The look's accent in light mode and in dark, from the plugin.
-const tint = values({ r: [0, 1], g: [0, 1], b: [0, 1], dr: [0, 1], dg: [0, 1], db: [0, 1] })
+// From the plugin: the look's accent in light mode and in dark, 1 while Claude
+// works on a turn, and 1 when a press starts a ripple.
+const tint = values({ r: [0, 1], g: [0, 1], b: [0, 1], dr: [0, 1], dg: [0, 1], db: [0, 1], busy: [0, 1], clicks: [0, 1] })
 
 const LUMA = vec3(0.2126, 0.7152, 0.0722)
 
@@ -33,11 +34,14 @@ const SPACING = 0.6
 const CELL = 12
 /** How long before its middle reaches a cell's middle a ring may show in the cell, in seconds. */
 const LEAD = (CELL * 0.71 + FRONT) / SPEED + 0.02
+/** One breath of the prompt box's glow while Claude works, in seconds. */
+const BREATH = 3.6
+/** How far the glow reaches out from the prompt box, in points. */
+const HALO = 30
+/** The most the glow changes a spot's luminance, 0 to 1: under a flash, even with an echo. */
+const GLOW = 0.06
 /** The most a faint ping changes a spot's luminance, 0 to 1: far under a flash. */
 const FAINT = 0.03
-
-/** Six numbers, one a ping. */
-type Six = [number, number, number, number, number, number]
 
 /** The pings' slots, one a texel of `pings`. */
 const SLOTS = [0, 1, 2, 3, 4, 5] as const
@@ -54,8 +58,10 @@ const inkOver = (under: vec3): vec3 =>
  * blends in sRGB or in linear light: one of strength a changes it a * this at most.
  */
 const swingOf = (under: vec3, ink: vec3): number => {
-  const lighter = pow(ink, 2.2) - pow(under, 2.2)
-  const darker = pow(under, 1.2) * (under - ink) * 2.2
+  // x * x is above x^2.2, and x * x * x below it, so this is above the true
+  // change as the ink lightens a spot; and x above x^1.2 as it darkens one.
+  const lighter = ink * ink - under * under * under
+  const darker = under * (under - ink) * 2.2
 
   return max(0.0001, dot(mix(darker, lighter, step(under, ink)), LUMA))
 }
@@ -86,7 +92,7 @@ const pings: Buffer = buffer({ size: [6, 1], float: 32, filter: 'nearest' }, p =
   }
   // A press takes the oldest ping's slot once that ping is gone; past six pings
   // a second, a press gets no ping.
-  const isStart = pressed > 0.5 && time - oldest >= LIFE && abs(p.cell.x - free) < 0.5
+  const isStart = pressed > 0.5 && tint.clicks > 0.5 && time - oldest >= LIFE && abs(p.cell.x - free) < 0.5
 
   return isStart ? vec4(at.x, at.y, time, 1) : pings.at(p.cell)
 })
@@ -175,10 +181,20 @@ const spots: Buffer = buffer({ scale: 1 / CELL, float: 32, filter: 'nearest' }, 
   return vec4(last, whose, handled, 1)
 })
 
+// How awake the prompt box's glow is, 0 to 1: it eases toward the plugin's
+// `busy` over about a second, so a turn's start and end never jump.
+const mood: Buffer = buffer({ size: [1, 1], float: 16, filter: 'nearest' }, () => {
+  const was = mood.at(vec2(0)).x
+
+  return vec4(was + (tint.busy - was) * min(1, dt * 1.5), 0, 0, 1)
+})
+
 const mark = picture(p => {
-  // Each ping here now.
-  const lit: Six = [0, 0, 0, 0, 0, 0]
+  // Each ping's ring and dot here now, full where its cell gave it the spot.
+  const cell = spots.sample(p.uv)
   let shown = 0
+  let full = 0
+  let faint = 0
 
   for (const slot of SLOTS) {
     const ping = pings.at(vec2(slot, 0))
@@ -191,36 +207,42 @@ const mark = picture(p => {
       const ring = exp(-(edge * edge) / 25) * (1 - u)
       const pin = smoothstep(6, 4, r) * (1 - smoothstep(0.5, 1, u))
 
-      lit[slot] = min(1, max(ring, pin) * 0.85)
-      shown = max(shown, lit[slot])
+      const bright = min(1, max(ring, pin) * 0.85)
+
+      // At most one ping lights a spot fully at a time: the one its cell gave
+      // the spot to. Any other is held under a change of FAINT below.
+      if (cell.w > 0.5 && cell.y === ping.z) {
+        full = max(full, bright)
+      } else {
+        faint = max(faint, bright)
+      }
+      shown = max(shown, bright)
     }
   }
-  if (shown < 0.003) {
+  // While Claude works, a soft breath of the accent around the prompt box.
+  const awake = mood.at(vec2(0)).x
+  let glow = 0
+
+  if (awake > 0.003 && composer.z > composer.x) {
+    const box = vec4(composer.x * size.x, composer.y * size.y, composer.z * size.x, composer.w * size.y)
+    const out = max(vec2(box.x - p.point.x, box.y - p.point.y), vec2(p.point.x - box.z, p.point.y - box.w))
+    const far = length(max(out, vec2(0)))
+
+    glow = awake * (0.6 + 0.4 * sin((time * 2 * PI) / BREATH)) * exp(-far / HALO)
+  }
+  if (shown < 0.003 && glow < 0.003) {
     return vec4(0)
   }
   const under = scene.sample(p.uv).rgb
   const ink = inkOver(under)
   const swing = swingOf(under, ink)
-  const cell = spots.sample(p.uv)
-  // At most one ping lights a spot fully at a time: the one its cell gave the
-  // spot to. Any other is held under a change of FAINT: an echo, or one too weak
-  // here to flash, as it is.
-  let full = 0
-  let faint = 0
-
-  for (const slot of SLOTS) {
-    const ping = pings.at(vec2(slot, 0))
-
-    if (cell.w > 0.5 && cell.y === ping.z) {
-      full = max(full, lit[slot])
-    } else {
-      faint = max(faint, min(lit[slot], FAINT / swing))
-    }
-  }
-  const shade = full + faint * (1 - full)
+  // An echo, or one too weak here to flash, as it is.
+  faint = min(faint, FAINT / swing)
+  const rings = full + faint * (1 - full)
+  const shade = rings + min(glow * 0.35, GLOW / swing) * (1 - rings)
 
   // Premultiplied.
   return vec4(ink * shade, shade)
 })
 
-export default shader({ fps: 30, passes: [pings, plans, spots, mark] })
+export default shader({ fps: 30, passes: [pings, plans, spots, mood, mark] })

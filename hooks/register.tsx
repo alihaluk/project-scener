@@ -38,6 +38,17 @@ let scene: Resolved['scene']
 let lastProblem: string | undefined
 let lastDropped: string | undefined
 
+// Whether the main loop is on a turn now, for the glow around the prompt box.
+let isWorking = false
+
+/** Says to the backdrop that a turn began or ended, when that changes anything. */
+function setWorking($: EngineInterface, working: boolean): void {
+  if (isWorking !== working) {
+    isWorking = working
+    $.ui.invalidate('ui.render')
+  }
+}
+
 /** "sound", "message style", or both, for a sentence. */
 function named(what: Extra[]): string {
   return what.map(extra => (extra === 'sound' ? 'sound' : 'message style')).join(' and ')
@@ -211,7 +222,7 @@ function settingsLine(settings: Settings): string {
 
   return (
     `Settings: sound ${sound}; message style ${onOff(settings.messageStyle)}; ` +
-    `ripples ${onOff(settings.ripples)}. ` +
+    `ripples ${onOff(settings.ripples)}; working glow ${onOff(settings.workingGlow)}. ` +
     'Change one with `/scene <setting> <value>`, like `/scene ripples off`.'
   )
 }
@@ -227,6 +238,7 @@ const OPTIONS: Record<string, Option> = {
   level: { field: 'soundLevel', label: 'Sound level', values: { quiet: 'quiet', normal: 'normal', loud: 'loud' } },
   style: { field: 'messageStyle', label: 'Message style', values: ON_OFF },
   ripples: { field: 'ripples', label: 'Ripples', values: ON_OFF },
+  glow: { field: 'workingGlow', label: 'Working glow', values: ON_OFF },
   default: {
     field: 'defaultLook',
     label: 'Default look',
@@ -246,6 +258,7 @@ function valueOf(field: string, options: PluginOptions): string | boolean {
     soundLevel: settings.level,
     messageStyle: settings.messageStyle,
     ripples: settings.ripples,
+    workingGlow: settings.workingGlow,
     defaultLook: lookNamed(String(options.defaultLook ?? ''))?.name ?? 'none',
   }
 
@@ -307,7 +320,23 @@ async function setOption(
   return { text: `${option.label}: ${word}, for every project.`, options: { ...options, [option.field]: value } }
 }
 
-function describe(found: Outcome): string {
+/**
+ * Why a look that was set is not drawn yet, by where the session is open. A
+ * desktop app that has the session open joins it only once it first draws, so
+ * a `/scene` sent as the session's first message finds no app yet.
+ */
+function undrawn(note: string, surfaces: readonly string[]): string {
+  if (surfaces.length === 0) {
+    return 'It is set. No app has shown this session yet: the desktop app draws the look as soon as it does.'
+  }
+  if (!surfaces.some(surface => surface === 'desktop' || surface === 'mobile')) {
+    return `It is set, but this session is open only in ${surfaces.join(' and ')}, which draws no looks: the Claude desktop app draws them.`
+  }
+
+  return `It is set, but no app that shows this session has drawn it yet (${note}).`
+}
+
+function describe(found: Outcome, surfaces: readonly string[]): string {
   const where: Record<Source, string> = {
     pick: 'your pick',
     file: `from ${PROJECT_FILE}`,
@@ -322,7 +351,7 @@ function describe(found: Outcome): string {
     lines.push(`Problem in ${found.problem}.`)
   }
   if (found.note !== undefined) {
-    lines.push(`It is saved, but nothing that draws looks has this session open (${found.note}).`)
+    lines.push(undrawn(found.note, surfaces))
   }
   const { what = [], why } = found.dropped ?? {}
 
@@ -359,6 +388,7 @@ const HELP = [
   '- `/scene level quiet|normal|loud`: how loud it is',
   "- `/scene style on|off`: your messages in the look's own bubbles",
   '- `/scene ripples on|off`: a ripple where you press it',
+  '- `/scene glow on|off`: a soft glow around the prompt box while Claude works',
   '- `/scene default <look>|none`: the look of projects you have not picked one for',
 ].join('\n')
 
@@ -395,6 +425,18 @@ export const register: Register = (on, initial) => {
 
   on('turn.start', async ($, e, next) => {
     await refresh($, options)
+    // The main loop's turn alone: a subagent's runs inside it.
+    if (e.agentId === undefined) {
+      setWorking($, true)
+    }
+
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    if (e.agentId === undefined) {
+      setWorking($, false)
+    }
 
     return next(e)
   })
@@ -413,7 +455,7 @@ export const register: Register = (on, initial) => {
       options = changed.options
       settings = settingsOf(options)
       // The look again with its sound and style as now set, and the backdrop
-      // again for the ripples.
+      // again for the ripples and the glow.
       await apply($, dir, options, true).catch(() => undefined)
       $.ui.invalidate('ui.render')
 
@@ -432,7 +474,7 @@ export const register: Register = (on, initial) => {
     const found = await apply($, dir, options, true)
     const surfaces = await $.session.surfaces().catch(() => [])
     const said =
-      `${describe(found)}\nThis session is open on: ${surfaces.length === 0 ? 'nothing that draws' : surfaces.join(', ')}.\n` +
+      `${describe(found, surfaces)}\nThis session is open on: ${surfaces.length === 0 ? 'no app yet' : surfaces.join(', ')}.\n` +
       settingsLine(settings)
 
     return { text: word === '' ? `${said}\n\n${HELP}` : said }
@@ -445,13 +487,18 @@ export const register: Register = (on, initial) => {
     const { Shader, Svg } = $.ui.resolve(e)
     const { ripple, tones } = scene
     const svg = <Svg source={scene.source} alt={scene.alt} isInteractive />
-    const tint = tones && ripple !== undefined && settings.ripples ? tintOf(tones) : undefined
+    const isPlayed = tones !== undefined && ripple !== undefined && (settings.ripples || settings.workingGlow)
+    const tint = isPlayed
+      ? { ...tintOf(tones), busy: isWorking && settings.workingGlow ? 1 : 0, clicks: settings.ripples ? 1 : 0 }
+      : undefined
 
-    // With ripples off, for a look with no ripple, or on a build older than
-    // 2.1.326 that has no Shader: the Svg alone, which is also what any surface
-    // shows when its shader cannot play. A shipped scene's ripple can also play
-    // over a project's own art, in the project's colors. A press needs no hook: the app plays the
-    // ripple on the GPU as it lands, and the scene is never sent again for it.
+    // With ripples and the glow off, for a look with no ripple, or on a build
+    // older than 2.1.326 that has no Shader: the Svg alone, which is also what
+    // any surface shows when its shader cannot play. A shipped scene's ripple
+    // can also play over a project's own art, in the project's colors. A press
+    // needs no hook: the app plays the ripple on the GPU as it lands, and the
+    // scene is never sent again for it. A turn's start and end send the
+    // shader's `busy` alone, with the scene unchanged.
     if (tint === undefined || (Shader as typeof Shader | undefined) === undefined) {
       return svg
     }
@@ -467,6 +514,14 @@ export const register: Register = (on, initial) => {
         return <Shader module="./shaders/terrain.ts" values={tint}>{svg}</Shader>
       case 'route':
         return <Shader module="./shaders/route.ts" values={tint}>{svg}</Shader>
+      case 'forest':
+        return <Shader module="./shaders/forest.ts" values={tint}>{svg}</Shader>
+      case 'aurora':
+        return <Shader module="./shaders/aurora.ts" values={tint}>{svg}</Shader>
+      case 'paper':
+        return <Shader module="./shaders/paper.ts" values={tint}>{svg}</Shader>
+      case 'desert':
+        return <Shader module="./shaders/desert.ts" values={tint}>{svg}</Shader>
       default:
         return svg
     }

@@ -2,7 +2,7 @@
 
 Give every project its own look in the Claude desktop app: a slow, moving backdrop with matching colors behind the conversation. With several sessions open, you can tell at a glance which project you are in.
 
-![The five looks, in light and dark mode](docs/looks.jpg)
+![The nine looks, in light and dark mode](docs/looks.jpg)
 
 It is a plugin for [Claude Code](https://claude.com/claude-code). Looks are drawn by the Claude desktop app alone: the mobile app does not draw them, and in a terminal or an editor the plugin does nothing. `/scene` says where the session is open.
 
@@ -49,12 +49,18 @@ That project now has the Tide look, in every session, until you change it. A git
 | `circuit` | A circuit board with signals travelling its traces, in green |
 | `terrain` | A contour map with a trail between two summits, in warm earth |
 | `route` | A delivery van driving a city route, in violet |
+| `forest` | Pines on misty ridges at dusk, with fireflies, in moss green |
+| `aurora` | Northern lights swaying over a snowy ridge, in green and violet |
+| `paper` | Ink sketches on ruled paper: a sun, birds and hills, in sepia |
+| `desert` | Dunes under a low sun, heat shimmer and a caravan, in sand and terracotta |
 
 Every look follows light and dark mode, and stands still for people who have asked their system for reduced motion.
 
 In the desktop app each look also has a quiet sound of its own and draws your messages in its own bubbles. The sound stays off until you press the speaker in the session's title bar.
 
-Click the bare backdrop and the look answers: in the desktop app a ripple spreads from where you pressed, gone within a second. Tide sends a wave, Night a star's glint, Circuit a square pulse along the board, Terrain a contour line and Route a ping.
+Click the bare backdrop and the look answers: in the desktop app a ripple spreads from where you pressed, gone within a second. Tide sends a wave, Night a star's glint, Circuit a square pulse along the board, Terrain a contour line, Route a ping, Forest a firefly, Aurora a tall curtain of light, Paper a blot of ink and Desert a low ripple over the sand.
+
+While Claude works on a turn, a soft glow in the look's accent breathes around the prompt box, so you can tell from across the room that it is still going. It eases in as the turn starts and out as it ends.
 
 The desktop app stops a ripple that flashes: one where a spot lights up more than three times a second. A ripple reaches a spot later the farther it is from where you pressed, so two clicks a little apart can light the same spot twice in a tenth of a second, however slowly you click. So the backdrop remembers when each spot was last lit fully: a ripple that would light it again within about 0.6 seconds passes there as a faint echo, too faint to count as a flash. Every click gets a ripple, up to six a second. A click changes nothing but the ripple: the scene is never sent again for it, since a scene sent again starts its animations over, and the app would take that jump for a flash too.
 
@@ -69,6 +75,7 @@ These are the plugin's options and apply to every project. `/scene` shows them. 
 | **Sound level** | `level quiet`, `level normal`, `level loud` | How loud, beside the app's own volume |
 | **Message style** | `style on`, `style off` | Off, your messages keep the app's own look |
 | **Ripples** | `ripples on`, `ripples off` | Off, a press on the backdrop plays no ripple |
+| **Working glow** | `glow on`, `glow off` | Off, the prompt box keeps no glow while Claude works |
 
 `/scene level` with no value says what it is now and what it takes.
 
@@ -186,6 +193,7 @@ Questions, problems and ideas for new looks: [open an issue](https://github.com/
 claude --plugin-dir . --debug     # run it from this folder, reloading on save
 claude plugin validate .          # check the manifest and the hooks module
 claude plugin test .              # run tests/
+node tests/flash-sim.mjs          # check every ripple against the app's flash limit
 ```
 
 | Path | What is there |
@@ -194,22 +202,26 @@ claude plugin test .              # run tests/
 | `hooks/config.ts` | Reads a project file and turns a look into a theme |
 | `hooks/looks.ts` | The shipped looks and their palettes |
 | `hooks/scenes/` | One file per scene, each drawn from a palette; `kit.ts` is what they share |
+| `hooks/shaders/` | One ripple a look, played on the GPU; each keeps the cells it has lit so none flashes |
+| `hooks/sounds.ts`, `hooks/styles.ts` | Each look's sound and message style |
+| `tests/flash-sim.mjs` | A port of the ripples' rules, run against every look and click pattern |
+| `CHANGELOG.md` | What changed in each version |
 | `hooks/make-colors.js` | Claude Code's theme builder, copied as it ships; do not edit |
 | `skills/design-scene/` | The guide Claude follows to design a project's own look |
 
-To add a look: draw a scene in `hooks/scenes/` (copy `tide.ts`), list it in `SCENES` in `hooks/looks.ts`, add a look with its palette to `LOOKS`, and add its name to `defaultLook` in `.claude-plugin/plugin.json`.
+To add a look: draw a scene in `hooks/scenes/` (copy `tide.ts`), list it in `SCENES` in `hooks/looks.ts`, and add a look with its palette to `LOOKS`. Give it a sound in `hooks/sounds.ts` and a style in `hooks/styles.ts` under its name. Give it a ripple in `hooks/shaders/` (copy the shader closest to it), draw that ripple in the `Backdrop` hook in `hooks/register.tsx`, and add its shape to `tests/flash-sim.mjs`. Last, add the name to `defaultLook` in `.claude-plugin/plugin.json`. Run `node tests/flash-sim.mjs` before you ship it.
 
 ## Türkçe
 
 Project Scener, Claude masaüstü uygulamasında her projeye kendi görünümünü verir: sohbetin arkasında yavaşça hareket eden bir sahne ve ona uyan renkler. Birden çok oturum açıkken hangi projede olduğunuzu bir bakışta anlarsınız.
 
-Masaüstü uygulamasında her görünümün ayrıca sakin bir sesi ve mesajlarınız için kendi balon stili var. Ses, oturumun başlık çubuğundaki hoparlöre basana kadar kapalı kalır. Arka planın boş bir yerine tıkladığınızda görünüm cevap verir: Tide bir dalga halkası, Night bir yıldız parıltısı, Circuit ızgara boyunca kare bir sinyal, Terrain bir eş yükselti çizgisi, Route da bir konum işareti gönderir. Uygulama yanıp sönen efektleri durdurduğu için, aynı yere kısa sürede ikinci kez gelen halka orada soluk geçer.
+Masaüstü uygulamasında her görünümün ayrıca sakin bir sesi ve mesajlarınız için kendi balon stili var. Ses, oturumun başlık çubuğundaki hoparlöre basana kadar kapalı kalır. Arka planın boş bir yerine tıkladığınızda görünüm cevap verir: Tide bir dalga halkası, Night bir yıldız parıltısı, Circuit ızgara boyunca kare bir sinyal, Terrain bir eş yükselti çizgisi, Route bir konum işareti, Forest bir ateşböceği, Aurora uzun bir ışık perdesi, Paper bir mürekkep lekesi, Desert de kumun üstünde alçak bir dalga gönderir. Claude bir tur üzerinde çalışırken, mesaj kutusunun çevresinde görünümün vurgu renginde hafif bir ışık nefes alır. Uygulama yanıp sönen efektleri durdurduğu için, aynı yere kısa sürede ikinci kez gelen halka orada soluk geçer.
 
 - `/scene`: projenin görünümünü ve hazır görünümleri gösterir
-- `/scene tide`: bu projeye bir görünüm seçer (`tide`, `night`, `circuit`, `terrain`, `route`)
+- `/scene tide`: bu projeye bir görünüm seçer (`tide`, `night`, `circuit`, `terrain`, `route`, `forest`, `aurora`, `paper`, `desert`)
 - `/scene off`: bu projede görünümü kapatır
 - `/scene reset`: seçiminizi unutur
-- `/scene <ayar> <değer>`: bir ayarı değiştirir, masaüstü uygulamasında da: `/scene sound off` (ses), `/scene level quiet` (ses düzeyi), `/scene style off` (mesaj stili), `/scene ripples off` (tıklama halkaları), `/scene default tide` (seçim yapılmamış projelerin görünümü)
+- `/scene <ayar> <değer>`: bir ayarı değiştirir, masaüstü uygulamasında da: `/scene sound off` (ses), `/scene level quiet` (ses düzeyi), `/scene style off` (mesaj stili), `/scene ripples off` (tıklama halkaları), `/scene glow off` (çalışırken mesaj kutusundaki ışık), `/scene default tide` (seçim yapılmamış projelerin görünümü)
 
 Projeye özel bir görünüm için Claude'a "bu proje için bir sahne tasarla" demeniz yeterli; Claude `.claude/scene.json` ve `.claude/scene.svg` dosyalarını yazar. Görünüme hazır görünümlerden uygun bir ses, mesaj stili ve tıklama halkası da seçer ve nedenini söyler. Bunlar `scene.json` içindeki `sound`, `style` ve `ripple` alanlarıdır; projenin kendi çiziminin üstündeki halka, projenin vurgu rengiyle oynar.
 

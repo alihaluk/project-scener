@@ -19,7 +19,7 @@
       "title": "Default look",
       "description": "The look of projects you have not picked one for.",
       "default": "none",
-      "options": ["none", "tide", "night", "circuit", "terrain", "route"]
+      "options": ["none", "tide", "night", "circuit", "terrain", "route", "forest", "aurora", "paper", "desert"]
     },
     "sound": {
       "type": "string",
@@ -45,6 +45,12 @@
       "type": "boolean",
       "title": "Ripples",
       "description": "Play a short ripple where you press the bare backdrop, in the desktop app.",
+      "default": true
+    },
+    "workingGlow": {
+      "type": "boolean",
+      "title": "Working glow",
+      "description": "While Claude works on a turn, a soft glow in the look's accent breathes around the prompt box, in the desktop app.",
       "default": true
     }
   }

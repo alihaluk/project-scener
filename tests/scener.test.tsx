@@ -17,7 +17,7 @@ type Refuse = (args: ThemeSetArgs) => string | undefined
 // record of what the plugin asked the app to draw. `refuse` plays a build
 // that turns some sets down, as the app's host check does: the plugin gets
 // the reason back as a rejection.
-function world(on: On, files: Record<string, string> = {}, picks?: Record<string, string>, refuse?: Refuse): World {
+function world(on: On, files: Record<string, string> = {}, picks?: Record<string, string>, refuse?: Refuse, undrawn?: string): World {
   const seen: World = { sets: [], refused: 0, clears: 0, toasts: [], store: picks ? { picks } : {} }
 
   on('store.get', (_, e) => ({ value: seen.store[e.key] }))
@@ -28,6 +28,8 @@ function world(on: On, files: Record<string, string> = {}, picks?: Record<string
   })
   on('command.register', () => ({ value: { command: 'scene' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
   on('session.cwd', () => ({ value: PROJECT }))
   on('session.repo', () => ({ value: null }))
   on('fs.exists', (_, e) => ({ value: e.path in files }))
@@ -55,7 +57,7 @@ function world(on: On, files: Record<string, string> = {}, picks?: Record<string
     }
     seen.sets.push(e)
 
-    return { value: { isDrawn: true, requestId: 'backdrop' } }
+    return { value: undrawn === undefined ? { isDrawn: true, requestId: 'backdrop' } : { isDrawn: false, reason: undrawn } }
   })
   on('theme.clear', () => {
     seen.clears++
@@ -115,6 +117,28 @@ test('a remembered pick is set when the session starts, and /scene sends it agai
   // A client that missed the look gets it from a plain /scene.
   expect((await $.command.run(typed())).text).toContain('This session is open on:')
   expect(seen.sets.map(sceneOf)).toEqual(['night', 'night'])
+})
+
+test('a /scene sent before any app has drawn the session says the desktop app will, not that nothing draws', async ($, on) => {
+  world(on, {}, { [PROJECT]: 'tide' }, undefined, 'no attached desktop or mobile client draws themes yet')
+  on('session.surfaces', () => ({ value: [] }))
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed())
+
+  expect(text).toContain('No app has shown this session yet: the desktop app draws the look as soon as it does.')
+  expect(text).toContain('This session is open on: no app yet.')
+  expect(text).not.toContain('nothing that draws')
+})
+
+test('a session open only in a terminal is told that the desktop app draws looks', async ($, on) => {
+  world(on, {}, { [PROJECT]: 'tide' }, undefined, 'no attached desktop or mobile client draws themes yet')
+  on('session.surfaces', () => ({ value: ['terminal'] }))
+
+  await $.session.start(START)
+  const { text } = await $.command.run(typed())
+
+  expect(text).toContain('open only in terminal, which draws no looks: the Claude desktop app draws them.')
 })
 
 test('/scene off takes the look down, and /scene reset brings the project file back', async ($, on) => {
@@ -293,7 +317,7 @@ test('a sound or style field that names no look says what it takes', async ($, o
   await $.session.start(START)
 
   expect(seen.sets.length).toBe(0)
-  expect(seen.toasts[0]).toContain('"sound" must be one of: tide, night, circuit, terrain, route, none, or an object of its own')
+  expect(seen.toasts[0]).toContain('"sound" must be one of: tide, night, circuit, terrain, route, forest, aurora, paper, desert, none, or an object of its own')
 })
 
 test('a look with no message style leaves the bubble colors to the app', async ($, on) => {
@@ -338,7 +362,7 @@ test('every shipped look plays its own shader over its scene', async ($, on) => 
     const shader = await ui.find({ type: 'Shader' })
 
     expect(shader?.props.module).toBe(`hooks/shaders/${look.scene}.ts`)
-    expect(Object.keys((shader?.props.values ?? {}) as object).sort()).toEqual(['b', 'db', 'dg', 'dr', 'g', 'r'])
+    expect(Object.keys((shader?.props.values ?? {}) as object).sort()).toEqual(['b', 'busy', 'clicks', 'db', 'dg', 'dr', 'g', 'r'])
     expect(await ui.find({ type: 'Svg' })).toBeDefined()
     await ui.unmount()
   }
@@ -386,7 +410,7 @@ test("a project's own art takes its look's ripple, and \"none\" leaves a shipped
 
 test('a ripple that is not a shipped scene is named in the problem', () => {
   expect(parseProjectFile('{ "scene": "tide", "ripple": "waves" }').problem).toBe(
-    '"ripple" must be one of: route, tide, night, circuit, terrain, none',
+    '"ripple" must be one of: route, tide, night, circuit, terrain, forest, aurora, paper, desert, none',
   )
   expect(parseProjectFile('{ "scene": "tide", "ripple": false }').value?.ripple).toBe(false)
 })
@@ -405,7 +429,7 @@ test("a project's own art draws with no shader", async ($, on) => {
   await ui.unmount()
 })
 
-test('the settings can turn the sound, the style and the ripples off', { options: { sound: 'off', messageStyle: false, ripples: false } }, async ($, on) => {
+test('the settings can turn the sound, the style, the ripples and the glow off', { options: { sound: 'off', messageStyle: false, ripples: false, workingGlow: false } }, async ($, on) => {
   const seen = world(on, {}, { [PROJECT]: 'tide' })
 
   await $.session.start(START)
@@ -416,7 +440,7 @@ test('the settings can turn the sound, the style and the ripples off', { options
   expect(seen.sets[0]?.colors?.inputs.light?.['bg-user-message']).toBeUndefined()
   expect(sceneOf(seen.sets[0])).toBe('tide')
   expect(text).not.toContain('title bar')
-  expect(text).toContain('Settings: sound off; message style off; ripples off.')
+  expect(text).toContain('Settings: sound off; message style off; ripples off; working glow off.')
 
   const ui = await backdrop($, 'tide')
 
@@ -450,7 +474,7 @@ test('the defaults keep everything on, and /scene says so', async ($, on) => {
   await $.session.start(START)
   const { text } = await $.command.run(typed())
 
-  expect(text).toContain('Settings: sound on, normal; message style on; ripples on.')
+  expect(text).toContain('Settings: sound on, normal; message style on; ripples on; working glow on.')
 })
 
 test('the backdrop is the shader over its scene, and nothing else', async ($, on) => {
@@ -465,7 +489,7 @@ test('the backdrop is the shader over its scene, and nothing else', async ($, on
   await ui.unmount()
 })
 
-const FIELDS = ['defaultLook', 'sound', 'soundLevel', 'messageStyle', 'ripples']
+const FIELDS = ['defaultLook', 'sound', 'soundLevel', 'messageStyle', 'ripples', 'workingGlow']
 
 // The plugin's rows in the settings menu, as an installed copy names them, and
 // a record of what `/scene <setting> <value>` wrote there. `deny` plays a row
@@ -498,7 +522,7 @@ function configMenu(on: On, deny?: string): { key: string; value: unknown }[] {
   return writes
 }
 
-test('/scene ripples off writes the plugin option, and the backdrop drops its shader at once', async ($, on) => {
+test('/scene ripples off writes the plugin option, and the shader stops starting ripples at once', async ($, on) => {
   world(on, {}, { [PROJECT]: 'tide' })
   const writes = configMenu(on)
 
@@ -507,13 +531,57 @@ test('/scene ripples off writes the plugin option, and the backdrop drops its sh
 
   expect(writes).toEqual([{ key: 'project-scener@project-scener.ripples', value: false }])
   expect(text).toContain('Ripples: off, for every project.')
-  expect(text).toContain('ripples off.')
+  expect(text).toContain('ripples off;')
 
-  const ui = await backdrop($, 'tide')
+  // The glow still plays, so the shader stays and starts no ripple.
+  let ui = await backdrop($, 'tide')
+
+  expect((await ui.find({ type: 'Shader' }))?.props.values).toMatchObject({ clicks: 0 })
+  await ui.unmount()
+
+  // With the glow off too, the scene draws alone.
+  await $.command.run(typed('glow off'))
+  ui = await backdrop($, 'tide')
 
   expect(await ui.find({ type: 'Shader' })).toBeUndefined()
   expect(await ui.find({ type: 'Svg' })).toBeDefined()
   await ui.unmount()
+})
+
+// What the shader is told about the turn, as the backdrop draws it now.
+async function busyOf($: Engine, scene: string): Promise<unknown> {
+  const ui = await backdrop($, scene)
+  const values = (await ui.find({ type: 'Shader' }))?.props.values as Record<string, number> | undefined
+
+  await ui.unmount()
+
+  return values?.busy
+}
+
+test('the glow wakes as the main turn starts and rests as it ends, a subagent aside', async ($, on) => {
+  world(on, {}, { [PROJECT]: 'tide' })
+
+  await $.session.start(START)
+  expect(await busyOf($, 'tide')).toBe(0)
+
+  await $.turn.start({ text: 'hello', turnId: 't1' })
+  expect(await busyOf($, 'tide')).toBe(1)
+
+  // A subagent's turn ending inside the main one leaves the glow awake.
+  await $.turn.complete({ answer: '', durationMs: 5, isAborted: false, turnId: 's1', agentId: 'a1', reason: 'answer' })
+  expect(await busyOf($, 'tide')).toBe(1)
+
+  await $.turn.complete({ answer: 'hi', durationMs: 10, isAborted: false, turnId: 't1', reason: 'answer' })
+  expect(await busyOf($, 'tide')).toBe(0)
+})
+
+test('with the glow off a turn leaves the shader asleep', { options: { workingGlow: false } }, async ($, on) => {
+  world(on, {}, { [PROJECT]: 'tide' })
+
+  await $.session.start(START)
+  await $.turn.start({ text: 'hello', turnId: 't1' })
+
+  expect(await busyOf($, 'tide')).toBe(0)
 })
 
 test('/scene sound cues sends the look again without its ambience', async ($, on) => {

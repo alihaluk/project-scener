@@ -468,6 +468,7 @@ export type Settings = {
   level: 'quiet' | 'normal' | 'loud'
   messageStyle: boolean
   ripples: boolean
+  workingGlow: boolean
 }
 
 const LEVELS: Record<Settings['level'], number> = { quiet: 0.5, normal: 1, loud: 2 }
@@ -483,6 +484,7 @@ export function settingsOf(options: PluginOptions): Settings {
     level: oneOf(options.soundLevel, ['quiet', 'normal', 'loud'] as const, 'normal'),
     messageStyle: options.messageStyle !== false,
     ripples: options.ripples !== false,
+    workingGlow: options.workingGlow !== false,
   }
 }
 

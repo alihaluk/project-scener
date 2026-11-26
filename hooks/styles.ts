@@ -35,4 +35,21 @@ export const STYLES: Record<string, ThemeStyle> = {
     // A speech bubble, its tail at the lower right.
     UserMessage: { ...BUBBLE, radius: [18, 18, 4, 18] },
   },
+  forest: {
+    // A leaf: rounded at two corners, pointed at the others.
+    UserMessage: { ...BUBBLE, radius: [18, 4, 18, 4] },
+  },
+  aurora: {
+    Heading: { letterSpacing: 0.5 },
+    UserMessage: { ...BUBBLE, radius: 22, shadow: { blur: 18, color: 'border-accent' } },
+  },
+  paper: {
+    Heading: { fontFamily: ['serif'], italic: true },
+    // An index card on the desk.
+    UserMessage: { ...BUBBLE, radius: 2, borderColor: 'border', borderWidth: 1, shadow: { y: 1, blur: 3, color: 'border' } },
+  },
+  desert: {
+    Heading: { fontWeight: 'bold', letterSpacing: 1 },
+    UserMessage: { ...BUBBLE, radius: 12, borderColor: 'border-accent', borderWidth: 1 },
+  },
 }
