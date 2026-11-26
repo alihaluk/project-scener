@@ -2,7 +2,7 @@
 
 What changed in each version of Project Scener. Update an installed copy with `claude plugin update project-scener@project-scener`, then `/reload-plugins` or a new session.
 
-## Unreleased
+## 1.6.0, 2026-11-26
 
 - **Four new looks:** `forest`, `aurora`, `paper` and `desert`, each with its own scene, colors, sound, message style and ripple.
 - **A glow while Claude works:** while a turn runs, a soft glow in the look's accent breathes around the prompt box. Turn it off with `/scene glow off`.
