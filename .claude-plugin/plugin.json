@@ -1,6 +1,6 @@
 {
   "name": "project-scener",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Gives each project its own look in the Claude desktop app: a moving backdrop with matching colors, so you can tell at a glance which project a session is in. Pick one with /scene.",
   "author": {
     "name": "haluk.seven",
