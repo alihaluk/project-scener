@@ -32,6 +32,8 @@ export type ProjectFile = {
   sound?: ThemeSound | false
   /** A shipped scene's message style, the file's own, or `false` for the app's own. */
   style?: ThemeStyle | false
+  /** The shipped scene whose ripple answers a press, or `false` for none. */
+  ripple?: string | false
   /** The file wrote a sound or a style of its own, so a refusal is its author's to fix. */
   ownSoundOrStyle?: true
 }
@@ -42,8 +44,11 @@ export type Resolved = {
   key: string
   label: string
   args: ThemeSetArgs
-  /** `tones` is a shipped scene's colors, which its shader draws in too. */
-  scene?: { id: string; source: string; alt: string; tones?: ScenePalette }
+  /**
+   * `ripple` names the shipped scene whose shader plays over the scene, and
+   * `tones` are the colors it draws in: the look's own, for a project's art too.
+   */
+  scene?: { id: string; source: string; alt: string; tones?: ScenePalette; ripple?: string }
   /** Why Desktop would refuse to paint the colors, when it would. */
   warning?: string
   /** As in ProjectFile: a refused sound or style is the project file's to fix. */
@@ -163,6 +168,21 @@ function extraOf<T>(value: unknown, field: string, shipped: Record<string, T>): 
   return isRecord(value) ? { value: value as T } : { problem: `"${field}" must be one of: ${names}, or an object of its own` }
 }
 
+/** A `ripple` field: a shipped scene's name, or `"none"` or `false` for none. */
+function rippleOf(value: unknown): Parsed<string | false | undefined> {
+  if (value === undefined) {
+    return { value: undefined }
+  }
+  if (value === false || value === 'none') {
+    return { value: false }
+  }
+  if (typeof value === 'string' && SCENES[value] !== undefined) {
+    return { value }
+  }
+
+  return { problem: `"ripple" must be one of: ${Object.keys(SCENES).join(', ')}, none` }
+}
+
 /** Whether a project file's `scene` names an SVG file and not a built-in scene. */
 export function isSceneFile(scene: string | undefined): scene is string {
   return scene !== undefined && scene.toLowerCase().endsWith('.svg')
@@ -203,9 +223,13 @@ export function parseProjectFile(text: string): Parsed<ProjectFile> {
   const glass = glassOf(data.glass)
   const sound = extraOf(data.sound, 'sound', SOUNDS)
   const style = extraOf(data.style, 'style', STYLES)
+  const ripple = rippleOf(data.ripple)
 
   if (colors.problem !== undefined || glass.problem !== undefined || sound.problem !== undefined || style.problem !== undefined) {
     return { problem: colors.problem ?? glass.problem ?? sound.problem ?? style.problem ?? '' }
+  }
+  if (ripple.problem !== undefined) {
+    return { problem: ripple.problem }
   }
   if (look === undefined && scene === undefined && colors.value === undefined) {
     return { problem: `it needs a "look" (${names}), a "scene" or "colors"` }
@@ -223,6 +247,7 @@ export function parseProjectFile(text: string): Parsed<ProjectFile> {
       ...(glass.value !== undefined && { glass: glass.value }),
       ...(sound.value !== undefined && { sound: sound.value }),
       ...(style.value !== undefined && { style: style.value }),
+      ...(ripple.value !== undefined && { ripple: ripple.value }),
       ...((isRecord(data.sound) || isRecord(data.style)) && { ownSoundOrStyle: true as const }),
     },
   }
@@ -370,7 +395,7 @@ function drawn(name: string, palette: Palette, alt?: string): Resolved['scene'] 
 
   const tones = tonesOf(palette)
 
-  return scene && { id: name, source: scene.draw(tones), alt: alt ?? scene.alt, tones }
+  return scene && { id: name, source: scene.draw(tones), alt: alt ?? scene.alt, tones, ripple: name }
 }
 
 /** A look that ships with the plugin, ready to set. */
@@ -394,8 +419,9 @@ export function resolveProjectFile(file: ProjectFile, svg?: string): Parsed<Reso
   const label = file.label ?? file.look?.title ?? 'Project look'
   const key = `file:${hash(JSON.stringify([file.look?.name, file, svg]))}`
   const name = file.scene ?? file.look?.scene
-  // A shipped scene brings its own sound and style; art of the project's own takes the look's.
+  // A shipped scene brings its own sound, style and ripple; art of the project's own takes the look's.
   const kin = name !== undefined && SCENES[name] !== undefined ? name : file.look?.scene
+  const ripple = file.ripple === false ? undefined : (file.ripple ?? kin)
   const extras = {
     sound: file.sound ?? (kin === undefined ? undefined : SOUNDS[kin]),
     style: file.style ?? (kin === undefined ? undefined : STYLES[kin]),
@@ -412,13 +438,24 @@ export function resolveProjectFile(file: ProjectFile, svg?: string): Parsed<Reso
       return { problem: `${name} is ${source.length} characters, and a scene can be ${SCENE_LIMIT} at most` }
     }
 
-    return build(key, { label, palette, scene: { id: 'project', source, alt: file.alt ?? label }, glass: file.glass, ...extras })
+    const scene = {
+      id: 'project',
+      source,
+      alt: file.alt ?? label,
+      tones: tonesOf(palette),
+      ...(ripple !== undefined && { ripple }),
+    }
+
+    return build(key, { label, palette, scene, glass: file.glass, ...extras })
   }
+
+  const shipped = name === undefined || name === 'none' ? undefined : drawn(name, palette, file.alt)
+  const { ripple: _, ...still } = shipped ?? {}
 
   return build(key, {
     label,
     palette,
-    scene: name === undefined || name === 'none' ? undefined : drawn(name, palette, file.alt),
+    scene: shipped && (ripple === undefined ? (still as Resolved['scene']) : { ...shipped, ripple }),
     glass: file.glass,
     ...extras,
   })

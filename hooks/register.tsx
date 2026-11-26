@@ -443,19 +443,20 @@ export const register: Register = (on, initial) => {
       return next(e)
     }
     const { Shader, Svg } = $.ui.resolve(e)
-    const { id, tones } = scene
+    const { ripple, tones } = scene
     const svg = <Svg source={scene.source} alt={scene.alt} isInteractive />
-    const tint = tones && settings.ripples ? tintOf(tones) : undefined
+    const tint = tones && ripple !== undefined && settings.ripples ? tintOf(tones) : undefined
 
-    // With ripples off, for a project's own art, or on a build older than 2.1.326
-    // that has no Shader: the Svg alone, which is also what any surface shows
-    // when its shader cannot play. A press needs no hook: the app plays the
+    // With ripples off, for a look with no ripple, or on a build older than
+    // 2.1.326 that has no Shader: the Svg alone, which is also what any surface
+    // shows when its shader cannot play. A shipped scene's ripple can also play
+    // over a project's own art, in the project's colors. A press needs no hook: the app plays the
     // ripple on the GPU as it lands, and the scene is never sent again for it.
     if (tint === undefined || (Shader as typeof Shader | undefined) === undefined) {
       return svg
     }
     // Each module is a literal in its element, as the engine reads it off the source.
-    switch (id) {
+    switch (ripple) {
       case 'tide':
         return <Shader module="./shaders/tide.ts" values={tint}>{svg}</Shader>
       case 'night':

@@ -107,7 +107,10 @@ or your own art, an SVG beside the file:
     "accent": "#e11d48",
     "light": { "background": "#f4ecee", "text": "#2a1a1e" },
     "dark": { "background": "#1a1114", "text": "#f3e6e9" }
-  }
+  },
+  "sound": "circuit",
+  "style": "circuit",
+  "ripple": "circuit"
 }
 ```
 
@@ -121,8 +124,9 @@ or your own art, an SVG beside the file:
 | `glass` | How the app frosts its panels over the scene: `{ "blur": 18, "opacity": 0.62 }`, or `false` |
 | `sound` | A shipped look's sound (`"night"`), `"none"`, or a sound of your own. Left out, a shipped scene brings its own, and your own art is silent |
 | `style` | How the desktop app draws messages: a shipped look's (`"circuit"`), `"none"` for the app's own, or a style of your own. Left out, as for `sound` |
+| `ripple` | What answers a click on the bare backdrop: a shipped look's ripple (`"tide"`), played over your scene in your `accent`, or `"none"`. Left out, as for `sound` |
 
-A scene SVG animates with CSS in its own `<style>`, runs no script and loads nothing, and can be up to 131,072 characters. [skills/design-scene/SKILL.md](skills/design-scene/SKILL.md) has the full guide, with how to write a sound and a style of your own.
+A scene SVG animates with CSS in its own `<style>`, runs no script and loads nothing, and can be up to 131,072 characters. [skills/design-scene/SKILL.md](skills/design-scene/SKILL.md) has the full guide, with how to write a sound and a style of your own. Asked to design a scene, Claude gives it a sound, a style and a ripple too.
 
 When a file has a mistake, `/scene` says what is wrong, and nothing is drawn until it is fixed.
 

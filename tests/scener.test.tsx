@@ -1,7 +1,7 @@
 import type { On, ThemeSetArgs } from 'claude-code'
 import { expect, test, type Engine } from 'claude-code/testing'
 
-import { resolveLook } from '../hooks/config.js'
+import { parseProjectFile, resolveLook } from '../hooks/config.js'
 import { LOOKS } from '../hooks/looks.js'
 import { contrast } from '../hooks/scenes/kit.js'
 import { SOUNDS } from '../hooks/sounds.js'
@@ -342,6 +342,53 @@ test('every shipped look plays its own shader over its scene', async ($, on) => 
     expect(await ui.find({ type: 'Svg' })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test("a project's own art plays the ripple it names, in its own accent", async ($, on) => {
+  world(on, {
+    [`${PROJECT}/.claude/scene.json`]: '{ "scene": "scene.svg", "colors": { "accent": "#e11d48" }, "ripple": "tide" }',
+    [`${PROJECT}/.claude/scene.svg`]: '<svg viewBox="0 0 10 10"><circle r="5"/></svg>',
+  })
+
+  await $.session.start(START)
+  const ui = await backdrop($, 'project')
+  const shader = await ui.find({ type: 'Shader' })
+  const values = shader?.props.values as Record<string, number> | undefined
+
+  expect(shader?.props.module).toBe('hooks/shaders/tide.ts')
+  expect(Math.abs((values?.r ?? 0) - 0xe1 / 255)).toBeLessThan(0.002)
+  expect(Math.abs((values?.g ?? 0) - 0x1d / 255)).toBeLessThan(0.002)
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  await ui.unmount()
+})
+
+test("a project's own art takes its look's ripple, and \"none\" leaves a shipped scene still", async ($, on) => {
+  const files: Record<string, string> = {
+    [`${PROJECT}/.claude/scene.json`]: '{ "look": "night", "scene": "scene.svg" }',
+    [`${PROJECT}/.claude/scene.svg`]: '<svg viewBox="0 0 10 10"><circle r="5"/></svg>',
+  }
+
+  world(on, files)
+  await $.session.start(START)
+  let ui = await backdrop($, 'project')
+
+  expect((await ui.find({ type: 'Shader' }))?.props.module).toBe('hooks/shaders/night.ts')
+  await ui.unmount()
+
+  files[`${PROJECT}/.claude/scene.json`] = '{ "scene": "circuit", "ripple": "none" }'
+  await $.command.run(typed())
+  ui = await backdrop($, 'circuit')
+
+  expect(await ui.find({ type: 'Shader' })).toBeUndefined()
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a ripple that is not a shipped scene is named in the problem', () => {
+  expect(parseProjectFile('{ "scene": "tide", "ripple": "waves" }').problem).toBe(
+    '"ripple" must be one of: route, tide, night, circuit, terrain, none',
+  )
+  expect(parseProjectFile('{ "scene": "tide", "ripple": false }').value?.ripple).toBe(false)
 })
 
 test("a project's own art draws with no shader", async ($, on) => {

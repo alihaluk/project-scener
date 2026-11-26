@@ -1,6 +1,6 @@
 ---
 name: design-scene
-description: Design a custom look for the current project with the project-scener plugin - a moving SVG backdrop and matching colors, with a sound and a message style, saved in the project's .claude folder. Use when the person asks to design, make, create or change a scene, backdrop, look or theme for this project, or to give the project its own colors, sound or message style.
+description: Design a custom look for the current project with the project-scener plugin - a moving SVG backdrop and matching colors, with a sound, a message style and a ripple on click, saved in the project's .claude folder. Use when the person asks to design, make, create or change a scene, backdrop, look or theme for this project, or to give the project its own colors, sound or message style.
 ---
 
 # Design a scene for this project
@@ -50,7 +50,10 @@ The project's own art and full palette:
     "light": { "background": "#f4ecee", "text": "#2a1a1e" },
     "dark": { "background": "#1a1114", "text": "#f3e6e9" }
   },
-  "glass": { "blur": 18, "opacity": 0.62 }
+  "glass": { "blur": 18, "opacity": 0.62 },
+  "sound": "circuit",
+  "style": "circuit",
+  "ripple": "circuit"
 }
 ```
 
@@ -64,6 +67,7 @@ The project's own art and full palette:
 | `glass` | How the app frosts its panels over the scene: `blur` 0 to 100, `opacity` 0 to 1 (lower shows more of the scene), or `false` for none. |
 | `sound` | A shipped look's sound by name, `"none"`, or a sound of the project's own (below). Left out, a shipped scene or `look` brings its own, and the project's own art is silent. |
 | `style` | How the desktop app draws messages: a shipped look's style by name, `"none"` for the app's own, or a style of the project's own (below). Left out, it follows `sound`'s rule. |
+| `ripple` | What answers a click on the bare backdrop in the desktop app: a shipped look's ripple by name, played over the scene in the project's own accent, or `"none"`. Left out, it follows `sound`'s rule. |
 
 Rules for colors that the plugin enforces with a toast when broken:
 
@@ -72,9 +76,21 @@ Rules for colors that the plugin enforces with a toast when broken:
 - Keep meaning: `danger` stays a red, `success` a green, `warning` an amber, each tuned toward the look.
 - A mode may also give `surface-1`, `surface-2`, `surface-3` (cards, panels, menus: each as light as the page or lighter), `text-secondary` and `text-muted`.
 
-### Sound and message style
+### Sound, message style and ripple
 
-Both are drawn by the desktop app alone, and most projects do well with a shipped look's (`"sound": "night"`). Write your own only when the person asks for it.
+A look is more than its picture: give every look you design a `sound`, a `style` and a `ripple`, even when the person only asked for a scene. Art of the project's own gets none of them unless the file names them, so leaving them out makes a silent look whose clicks do nothing.
+
+Pick each by the mood of the project from the shipped looks, by name, and say in one line which you chose and why:
+
+| Name | Sound | Message style | Ripple |
+| --- | --- | --- | --- |
+| `tide` | surf that swells and falls back, bell cues | a well-rounded bubble | one ring spreading like a wave |
+| `night` | a low drone with a far star's bell now and then | a bubble with a thin glowing accent border | a star's glint |
+| `circuit` | a board's hum and faint blips, a tick for each tool call | square bubble, monospaced headings, framed tool rows | a square pulse out along a grid |
+| `terrain` | wind gusting over a ridge | a bubble with a soft shadow, serif headings | an uneven contour line |
+| `route` | a low city rumble and a far signal | a speech bubble, its tail at the lower right | a pin's ping and one ring |
+
+The three needn't match: a teal project with a calm feel might take `tide` for all three, a map-heavy one `route`'s ripple with `terrain`'s sound. The ripple plays over the project's own art in its `accent`, so check that the accent reads on the scene in both modes. All three are drawn by the desktop app alone. Write a sound or style of the project's own only when the person asks for it.
 
 A sound is numbers, never a file: the app makes it from layers of tones and noise. It stays off until the person presses the speaker in the session's title bar.
 
@@ -145,6 +161,6 @@ One self-contained SVG, drawn behind the whole window:
 
 1. Read `scene.json` back as JSON, and check the SVG is well formed and under the size limit.
 2. Tell the person to run `/scene`: it applies the files at once and reports any problem in them by name. A problem also shows as a toast.
-3. Ask them to look in both light and dark mode, and adjust from what they say. You cannot see the result yourself. Where the look has a sound, ask them to press the speaker in the session's title bar and listen too.
+3. Ask them to look in both light and dark mode, and adjust from what they say. You cannot see the result yourself. Ask them to press the speaker in the session's title bar and listen, and to click the bare backdrop a few times to see the ripple.
 
 The person's own `/scene <look>` pick for a project wins over these files; `/scene reset` goes back to them.
