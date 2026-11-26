@@ -203,13 +203,15 @@ To add a look: draw a scene in `hooks/scenes/` (copy `tide.ts`), list it in `SCE
 
 Project Scener, Claude masaüstü uygulamasında her projeye kendi görünümünü verir: sohbetin arkasında yavaşça hareket eden bir sahne ve ona uyan renkler. Birden çok oturum açıkken hangi projede olduğunuzu bir bakışta anlarsınız.
 
+Masaüstü uygulamasında her görünümün ayrıca sakin bir sesi ve mesajlarınız için kendi balon stili var. Ses, oturumun başlık çubuğundaki hoparlöre basana kadar kapalı kalır. Arka planın boş bir yerine tıkladığınızda görünüm cevap verir: Tide bir dalga halkası, Night bir yıldız parıltısı, Circuit ızgara boyunca kare bir sinyal, Terrain bir eş yükselti çizgisi, Route da bir konum işareti gönderir. Uygulama yanıp sönen efektleri durdurduğu için, aynı yere kısa sürede ikinci kez gelen halka orada soluk geçer.
+
 - `/scene`: projenin görünümünü ve hazır görünümleri gösterir
 - `/scene tide`: bu projeye bir görünüm seçer (`tide`, `night`, `circuit`, `terrain`, `route`)
 - `/scene off`: bu projede görünümü kapatır
 - `/scene reset`: seçiminizi unutur
-- `/scene <ayar> <değer>`: bir ayarı değiştirir, masaüstü uygulamasında da: `/scene sound off`, `/scene level quiet`, `/scene style off`, `/scene ripples off`, `/scene default tide`
+- `/scene <ayar> <değer>`: bir ayarı değiştirir, masaüstü uygulamasında da: `/scene sound off` (ses), `/scene level quiet` (ses düzeyi), `/scene style off` (mesaj stili), `/scene ripples off` (tıklama halkaları), `/scene default tide` (seçim yapılmamış projelerin görünümü)
 
-Projeye özel bir görünüm için Claude'a "bu proje için bir sahne tasarla" demeniz yeterli; Claude `.claude/scene.json` ve `.claude/scene.svg` dosyalarını yazar.
+Projeye özel bir görünüm için Claude'a "bu proje için bir sahne tasarla" demeniz yeterli; Claude `.claude/scene.json` ve `.claude/scene.svg` dosyalarını yazar. Görünüme hazır görünümlerden uygun bir ses, mesaj stili ve tıklama halkası da seçer ve nedenini söyler. Bunlar `scene.json` içindeki `sound`, `style` ve `ripple` alanlarıdır; projenin kendi çiziminin üstündeki halka, projenin vurgu rengiyle oynar.
 
 ## License
 
