@@ -4,7 +4,7 @@ Give every project its own look in the Claude desktop app: a slow, moving backdr
 
 ![The five looks, in light and dark mode](docs/looks.jpg)
 
-It is a plugin for [Claude Code](https://claude.com/claude-code). Looks are drawn by the Claude desktop app. Claude Code can also draw them in the mobile app, but a phone that opens a session running on your computer may not draw them yet: `/scene` says where the session is open. In a terminal or an editor the plugin does nothing.
+It is a plugin for [Claude Code](https://claude.com/claude-code). Looks are drawn by the Claude desktop app alone: the mobile app does not draw them, and in a terminal or an editor the plugin does nothing. `/scene` says where the session is open.
 
 ## Install
 

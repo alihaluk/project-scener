@@ -5,7 +5,7 @@ description: Design a custom look for the current project with the project-scene
 
 # Design a scene for this project
 
-The project-scener plugin draws a look behind the conversation in the Claude desktop app, and in the mobile app where it draws looks. A project gets a look of its own from two files in its `.claude` folder, which you write:
+The project-scener plugin draws a look behind the conversation in the Claude desktop app. A project gets a look of its own from two files in its `.claude` folder, which you write:
 
 - `.claude/scene.json`: the colors, and which scene to draw
 - `.claude/scene.svg`: the scene, when the project has its own art
