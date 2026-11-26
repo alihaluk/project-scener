@@ -42,7 +42,7 @@ export type Resolved = {
   key: string
   label: string
   args: ThemeSetArgs
-  /** `tones` is a shipped scene's colors, which its marks and shader draw in too. */
+  /** `tones` is a shipped scene's colors, which its shader draws in too. */
   scene?: { id: string; source: string; alt: string; tones?: ScenePalette }
   /** Why Desktop would refuse to paint the colors, when it would. */
   warning?: string
@@ -430,7 +430,6 @@ export type Settings = {
   /** How loud, beside the looks' own levels: a factor on every layer's gain. */
   level: 'quiet' | 'normal' | 'loud'
   messageStyle: boolean
-  clickMarks: boolean
   ripples: boolean
 }
 
@@ -446,7 +445,6 @@ export function settingsOf(options: PluginOptions): Settings {
     sound: oneOf(options.sound, ['on', 'cues only', 'off'] as const, 'on'),
     level: oneOf(options.soundLevel, ['quiet', 'normal', 'loud'] as const, 'normal'),
     messageStyle: options.messageStyle !== false,
-    clickMarks: options.clickMarks !== false,
     ripples: options.ripples !== false,
   }
 }

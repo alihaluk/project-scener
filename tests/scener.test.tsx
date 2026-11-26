@@ -4,7 +4,6 @@ import { expect, test, type Engine } from 'claude-code/testing'
 import { resolveLook } from '../hooks/config.js'
 import { LOOKS } from '../hooks/looks.js'
 import { contrast } from '../hooks/scenes/kit.js'
-import { added, withMarks, type Point } from '../hooks/scenes/marks.js'
 import { SOUNDS } from '../hooks/sounds.js'
 
 const PROJECT = '/work/shop'
@@ -359,47 +358,6 @@ test("a project's own art draws with no shader", async ($, on) => {
   await ui.unmount()
 })
 
-// The app raises a click on the backdrop itself, and a test can't: the marks a
-// click leaves are checked here as the hook draws them.
-const TONES = resolveLook(LOOKS[1]!).value?.scene?.tones
-
-test('a mark lands where the click was, joined to the one before', () => {
-  const source = withMarks('<svg/>', 'night', TONES!, [
-    { x: 0.25, y: 0.5 },
-    { x: 0.75, y: 0.125 },
-  ])
-
-  expect(source).toContain('<svg x="25.00%" y="50.00%" overflow="visible">')
-  expect(source).toContain('<line class="mk-path" x1="25.00%" y1="50.00%" x2="75.00%" y2="12.50%"/>')
-  expect(source).toContain('prefers-reduced-motion')
-})
-
-test('marks keep the newest twelve', () => {
-  let points: Point[] = []
-
-  for (let at = 0; at < 15; at++) {
-    points = added(points, { x: at / 16, y: 0.5 })
-  }
-
-  expect(points.length).toBe(12)
-  expect(points[0]?.x).toBe(3 / 16)
-})
-
-test('a scene with no marks, or no clicks yet, draws as it is', () => {
-  expect(withMarks('<svg/>', 'project', TONES!, [{ x: 0.5, y: 0.5 }])).toBe('<svg/>')
-  expect(withMarks('<svg/>', 'tide', TONES!, [])).toBe('<svg/>')
-})
-
-test('every shipped scene with a full set of marks stays under the size limit', () => {
-  const points = Array.from({ length: 12 }, (_, at) => ({ x: at / 12, y: 0.5 }))
-
-  for (const look of LOOKS) {
-    const scene = resolveLook(look).value?.scene
-
-    expect(withMarks(scene?.source ?? '', look.scene, scene?.tones ?? TONES!, points).length).toBeLessThan(131072)
-  }
-})
-
 test('the settings can turn the sound, the style and the ripples off', { options: { sound: 'off', messageStyle: false, ripples: false } }, async ($, on) => {
   const seen = world(on, {}, { [PROJECT]: 'tide' })
 
@@ -411,7 +369,7 @@ test('the settings can turn the sound, the style and the ripples off', { options
   expect(seen.sets[0]?.colors?.inputs.light?.['bg-user-message']).toBeUndefined()
   expect(sceneOf(seen.sets[0])).toBe('tide')
   expect(text).not.toContain('title bar')
-  expect(text).toContain('Settings: sound off; message style off; marks on click on; ripples off.')
+  expect(text).toContain('Settings: sound off; message style off; ripples off.')
 
   const ui = await backdrop($, 'tide')
 
@@ -445,10 +403,22 @@ test('the defaults keep everything on, and /scene says so', async ($, on) => {
   await $.session.start(START)
   const { text } = await $.command.run(typed())
 
-  expect(text).toContain('Settings: sound on, normal; message style on; marks on click on; ripples on.')
+  expect(text).toContain('Settings: sound on, normal; message style on; ripples on.')
 })
 
-const FIELDS = ['defaultLook', 'sound', 'soundLevel', 'messageStyle', 'clickMarks', 'ripples']
+test('the backdrop is the shader over its scene, and nothing else', async ($, on) => {
+  world(on, {}, { [PROJECT]: 'tide' })
+
+  await $.session.start(START)
+  const ui = await backdrop($, 'tide')
+  const shader = await ui.find({ type: 'Shader' })
+
+  expect(shader?.props.module).toBe('hooks/shaders/tide.ts')
+  expect(await ui.find({ type: 'Box' })).toBeUndefined()
+  await ui.unmount()
+})
+
+const FIELDS = ['defaultLook', 'sound', 'soundLevel', 'messageStyle', 'ripples']
 
 // The plugin's rows in the settings menu, as an installed copy names them, and
 // a record of what `/scene <setting> <value>` wrote there. `deny` plays a row
@@ -535,7 +505,7 @@ test('a setting with no value, or one it does not take, says what it takes and w
   await $.session.start(START)
 
   expect((await $.command.run(typed('level'))).text).toBe('Sound level is normal. `/scene level` takes: quiet, normal, loud.')
-  expect((await $.command.run(typed('marks maybe'))).text).toContain('"maybe" is not one of them.')
+  expect((await $.command.run(typed('ripples maybe'))).text).toContain('"maybe" is not one of them.')
   expect(writes).toEqual([])
 })
 

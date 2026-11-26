@@ -41,12 +41,6 @@
       "description": "Draw your messages in the look's own bubbles in the desktop app. Off, they keep the app's own.",
       "default": true
     },
-    "clickMarks": {
-      "type": "boolean",
-      "title": "Marks on click",
-      "description": "Leave a mark where you click the bare backdrop: a star, a flag, a stop. They stay until the look changes.",
-      "default": true
-    },
     "ripples": {
       "type": "boolean",
       "title": "Ripples",
